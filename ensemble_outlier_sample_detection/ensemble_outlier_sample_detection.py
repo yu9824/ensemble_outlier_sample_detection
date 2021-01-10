@@ -8,6 +8,7 @@ from sklearn.cross_decomposition import PLSRegression
 from sklearn.model_selection import cross_val_predict
 from sklearn.utils import resample
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+from sklearn.svm import SVR
 import optuna
 
 class EnsembleOutlierSampleDetector:
@@ -20,6 +21,8 @@ class EnsembleOutlierSampleDetector:
         if method in ('pls', 'PLS'):
             self.method = 'pls'
             self.max_components = max_components
+        elif method in ('svr', 'SVR'):
+            self.method = 'svr'
         else:
             raise NotImplementedError
 
@@ -53,6 +56,11 @@ class EnsembleOutlierSampleDetector:
     def fit(self, X, y):
         if self.progress_bar:
             pbar = tqdm(total = self.max_iter * self.n_estimators)
+
+        # Objectiveオブジェクトの中でも参照できるようにローカル変数にも値をおいておく
+        cv = self.cv
+        n_jobs = self.n_jobs
+        metric = self.metric
 
         X_original = X
 
@@ -89,28 +97,48 @@ class EnsembleOutlierSampleDetector:
                 scaler_y = StandardScaler()
                 y_bootstrapped = scaler_y.fit_transform(np.array(y_bootstrapped).reshape(-1, 1))
 
+                # PLS用のmax_componentsよりサンプル数が少なくなってしまう場合があるので．
                 if self.method == 'pls':
-                    model = PLSRegression
-                    fixed_params = {
-                        'scale':False, 
-                    }
-
-                    # 設定したself.max_componentsより有効なサンプル数が少ない場合があるので，それを求める．
                     max_components = min(self.max_components, np.linalg.matrix_rank(X_bootstrapped))
+                elif self.method == 'svr':
+                    max_components = self.max_iter_optuna
 
-                    # n_componentsの最適化
-                    def objective(trial):
+                class Objective:
+                    def __init__(self, method):
+                        self.method = method
+                        if self.method == 'pls':
+                            self.model = PLSRegression
+                            self.fixed_params = {
+                                'scale':False,
+                            }
+                        elif self.method == 'svr':
+                            self.model = SVR
+                            self.fixed_params = {
+                                'kernel': 'rbf',
+                            }
+
+                    def __call__(self, trial):
+                        if self.method == 'pls':
                         # suggest_intは[)区間ではなく，[]区間
-                        params = {
-                            'n_components' : trial.suggest_int('n_components', 1, max_components),
-                        }
-                        estimator = model(**params, **fixed_params)
+                            params = {
+                                'n_components' : trial.suggest_int('n_components', 1, max_components),
+                            }
+                        elif self.method == 'svr':
+                            params = {
+                                'C': trial.suggest_loguniform('C', 2 ** -5, 2 ** 11),
+                                'epsilon': trial.suggest_loguniform('epsilon', 2 ** -10, 2 ** 1),
+                                'gamma': trial.suggest_loguniform('gamma', 2 ** -20, 2 ** 11),
+                            }
+
+                        estimator = self.model(**params, **self.fixed_params)
                         
                         # Out-of-Foldのyを得る（bootstrapをしている時点ですべてもうランダムに分割されていると考え，ここではshuffleしない．）
-                        y_pred_oof = cross_val_predict(estimator, X_bootstrapped, y_bootstrapped, cv = self.cv, n_jobs = self.n_jobs)
+                        y_pred_oof = cross_val_predict(estimator, X_bootstrapped, y_bootstrapped, cv = cv, n_jobs = n_jobs)
 
                         # scaleを元に戻してscoreを算出．（y_bootstrappedをcross_val_predictの引数にいれたため，同じ形（-1, 1)にすでになっているため，このままscalerを適用できる．
-                        return self.metric(scaler_y.inverse_transform(y_pred_oof), scaler_y.inverse_transform(y_bootstrapped))
+                        return metric(scaler_y.inverse_transform(y_pred_oof), scaler_y.inverse_transform(y_bootstrapped))
+
+                objective = Objective(method = self.method)
 
                 # 最適化
                 optuna.logging.disable_default_handler()    # optunaのログを非表示
@@ -119,7 +147,7 @@ class EnsembleOutlierSampleDetector:
                 study.optimize(objective, n_trials = min(self.max_iter_optuna, max_components), n_jobs = self.n_jobs)
 
                 # 最適なモデルを定義
-                estimator = model(**study.best_params, **fixed_params)
+                estimator = objective.model(**study.best_params, **objective.fixed_params)
 
                 # fit
                 estimator.fit(X_bootstrapped, y_bootstrapped)
@@ -169,7 +197,7 @@ if __name__ == '__main__':
     X = df.iloc[:, 1:]
     y = df.iloc[:, 0]
 
-    elo = EnsembleOutlierSampleDetector(random_state=334, n_jobs = -1, cv = 2)
+    elo = EnsembleOutlierSampleDetector(random_state=334, n_jobs = -1, cv = 5)
     elo.fit(X, y)
     
     set_trace()
