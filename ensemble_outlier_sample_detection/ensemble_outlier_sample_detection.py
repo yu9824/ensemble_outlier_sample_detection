@@ -185,6 +185,10 @@ class EnsembleOutlierSampleDetector:
             else:
                 boolean_outlier_previous = boolean_outlier.copy()
             
+            # プログレスバーを閉じる
+            if self.progress_bar:
+                pbar.close()
+            
     def _extract(self, X, i):
         return X.iloc[i] if isinstance(X, pd.DataFrame) else X[i]
 
