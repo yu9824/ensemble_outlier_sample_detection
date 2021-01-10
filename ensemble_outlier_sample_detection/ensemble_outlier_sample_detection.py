@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from scipy.spatial.distance import cdist
 from tqdm import tqdm
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import VarianceThreshold
