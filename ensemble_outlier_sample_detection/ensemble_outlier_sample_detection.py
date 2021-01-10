@@ -11,7 +11,7 @@ from sklearn.metrics import r2_score
 import optuna
 
 class EnsembleOutlierSampleDetector:
-    def __init__(self, method = 'pls', max_iter = 30, n_estimators = 100, random_state = None, cv = 5, metric = 'r2', n_jobs = 1, max_components = 30):
+    def __init__(self, method = 'pls', max_iter = 30, n_estimators = 100, random_state = None, cv = 5, metric = 'r2', n_jobs = 1, max_components = 30, progress_bar = True):
         '''
         method: 'pls' or 'svr'
         n_estimators: default; 100. int. The number of submodels.
@@ -34,18 +34,25 @@ class EnsembleOutlierSampleDetector:
         self.n_estimators = n_estimators
         self.cv = cv
         self.n_jobs = n_jobs
+        self.progress_bar = progress_bar
 
         self.max_iter_optuna = 100
 
         self.RANGE = 10 ** 9    # sklearn用の乱数を発生させる範囲
         np.random.seed(random_state)
 
+    
     def fit(self, X, y):
-        n_samples = len(X)
+        if self.progress_bar:
+            pbar = tqdm(total = self.max_iter * self.n_estimators)
 
+        X_original = X
+
+        n_samples = len(X_original)
+        
         boolean_outlier = np.zeros(n_samples, dtype = bool)
         boolean_outlier_previous = boolean_outlier.copy()
-        for i in tqdm(range(self.max_iter), desc = 'iteration'):
+        for i in range(self.max_iter):
             # 前回の外れサンプル判定の結果残るサンプル
             X_remained = self._extract(X, i = ~boolean_outlier_previous)
             y_remained = self._extract(y, i = ~boolean_outlier_previous)
@@ -55,14 +62,14 @@ class EnsembleOutlierSampleDetector:
             srs_y_pred = []
 
             # 各estimatorをoofで最適化したのち，予測結果を出す
-            for j in tqdm(range(self.n_estimators)):
+            for j in range(self.n_estimators):
                 # いわゆるBootstrap．毎回違うbootstrapにするため．np.random.randintでrandom_stateを規定
                 X_bootstrapped, y_bootstrapped = resample(X_remained, y_remained, random_state = np.random.randint(self.RANGE), n_samples = n_samples_remained)
 
                 # 分散が0の（特徴量がすべてのサンプルで同じ値をとる）特徴量を削除
                 selector = VarianceThreshold(threshold = 0)
                 X_bootstrapped = selector.fit_transform(X_bootstrapped)
-                X = selector.transform(X)
+                X = selector.transform(X_original)
 
                 # 標準化したもので置き換える
                 # X
@@ -114,20 +121,30 @@ class EnsembleOutlierSampleDetector:
                 
                 # scaleを元に戻すしてSeriesとしたものを蓄積（inverse_transformしたものは2次元なのでflatten()）
                 srs_y_pred.append(pd.Series(scaler_y.inverse_transform(y_pred).flatten(), name = 'estimator{}'.format(j)))
+
+                # progressbarを一つ進める．
+                if self.progress_bar:
+                    pbar.set_description(desc = '[iter {0} / {1}]'.format(i, self.max_iter))
+                    pbar.update(1)
             
+            # アンサンブルした結果を一つのDataFrameにまとめる．
             df_y_pred = pd.concat(srs_y_pred, axis = 1)
             df_y_pred.index = y.index
 
-            # 前回の言うところ，「普通の」（外れ値ではない）サンプル
+            # 前回の言うところ，「普通の」（外れ値ではない）サンプルだけを抽出
             df_y_pred_normal = self._extract(df_y_pred, ~boolean_outlier_previous)
 
+            # median_absolute_deviation（中央絶対偏差）
             median_absolute_deviation = np.median(abs(df_y_pred_normal - df_y_pred_normal.median(axis = 1).median()))
 
+            # 偏差を求める
             y_error = abs(y - df_y_pred.median(axis = 1)).to_numpy()
 
+            # 所謂3σに変わる基準でそれを超えるならばoutlierであると一旦判定
             boolean_outlier = y_error > 3 * 1.4826 * median_absolute_deviation
             if np.all(boolean_outlier == boolean_outlier_previous):
                 self.outlier_support_ = boolean_outlier
+                self.iter_finished = i
                 break
             else:
                 boolean_outlier_previous = boolean_outlier.copy()
@@ -144,7 +161,7 @@ if __name__ == '__main__':
     X = df.iloc[:, 1:]
     y = df.iloc[:, 0]
 
-    elo = ensemble_outlier_sample_detection(random_state=334, n_jobs = -1)
+    elo = EnsembleOutlierSampleDetector(random_state=334, n_jobs = -1)
     elo.fit(X, y)
     
     set_trace()
