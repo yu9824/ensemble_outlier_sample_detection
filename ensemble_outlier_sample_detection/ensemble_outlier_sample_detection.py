@@ -10,7 +10,7 @@ from sklearn.utils import resample
 from sklearn.metrics import r2_score
 import optuna
 
-class ensemble_outlier_sample_detection:
+class EnsembleOutlierSampleDetector:
     def __init__(self, method = 'pls', max_iter = 30, n_estimators = 100, random_state = None, cv = 5, metric = 'r2', n_jobs = 1, max_components = 30):
         '''
         method: 'pls' or 'svr'
