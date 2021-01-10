@@ -7,7 +7,7 @@ from sklearn.feature_selection import VarianceThreshold
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.model_selection import cross_val_predict
 from sklearn.utils import resample
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 import optuna
 
 class EnsembleOutlierSampleDetector:
@@ -26,8 +26,16 @@ class EnsembleOutlierSampleDetector:
         if metric == 'r2':
             self.metric = r2_score
             self.direction = 'maximize'
-        else:
+        elif metric == 'mse':
+            self.metric = mean_squared_error
             self.direction = 'minimize'
+        elif metric == 'mae':
+            self.metric = mean_absolute_error
+            self.direction = 'minimize'
+        elif metric == 'rmse':
+            self.metric = lambda x, y:mean_squared_error(x, y, squared=False)
+            self.direction = 'minimize'
+        else:
             raise NotImplementedError
 
         self.max_iter = max_iter
@@ -54,7 +62,7 @@ class EnsembleOutlierSampleDetector:
         boolean_outlier_previous = boolean_outlier.copy()
         for i in range(self.max_iter):
             # 前回の外れサンプル判定の結果残るサンプル
-            X_remained = self._extract(X, i = ~boolean_outlier_previous)
+            X_remained = self._extract(X_original, i = ~boolean_outlier_previous)
             y_remained = self._extract(y, i = ~boolean_outlier_previous)
             n_samples_remained = np.sum(~boolean_outlier_previous)
 
@@ -142,7 +150,7 @@ class EnsembleOutlierSampleDetector:
 
             # 所謂3σに変わる基準でそれを超えるならばoutlierであると一旦判定
             boolean_outlier = y_error > 3 * 1.4826 * median_absolute_deviation
-            if np.all(boolean_outlier == boolean_outlier_previous):
+            if np.all(boolean_outlier == boolean_outlier_previous) or np.sum(~boolean_outlier) == 0:
                 self.outlier_support_ = boolean_outlier
                 self.iter_finished = i
                 break
@@ -161,7 +169,7 @@ if __name__ == '__main__':
     X = df.iloc[:, 1:]
     y = df.iloc[:, 0]
 
-    elo = EnsembleOutlierSampleDetector(random_state=334, n_jobs = -1)
+    elo = EnsembleOutlierSampleDetector(random_state=334, n_jobs = -1, cv = 2)
     elo.fit(X, y)
     
     set_trace()
