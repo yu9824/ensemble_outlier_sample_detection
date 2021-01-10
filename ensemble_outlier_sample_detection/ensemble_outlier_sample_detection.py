@@ -52,7 +52,7 @@ class ensemble_outlier_sample_detection:
             n_samples_remained = np.sum(~boolean_outlier_previous)
 
             # 各estimatorの出した結果を保存しておくリスト（最後にconcat）
-            srs_y = []
+            srs_y_pred = []
 
             # 各estimatorをoofで最適化したのち，予測結果を出す
             for j in tqdm(range(self.n_estimators)):
@@ -61,14 +61,14 @@ class ensemble_outlier_sample_detection:
 
                 # 分散が0の（特徴量がすべてのサンプルで同じ値をとる）特徴量を削除
                 selector = VarianceThreshold(threshold = 0)
-                X_bootstrap_selected = selector.fit_transform(X_bootstrapped)
-                X_selected = selector.transform(X)
+                X_bootstrapped = selector.fit_transform(X_bootstrapped)
+                X = selector.transform(X)
 
                 # 標準化したもので置き換える
                 # X
                 scaler_X = StandardScaler()
-                X_bootstrap_selected = scaler_X.fit_transform(X_bootstrap_selected)
-                X_selected = scaler_X.transform(X_selected)
+                X_bootstrapped = scaler_X.fit_transform(X_bootstrapped)
+                X = scaler_X.transform(X)
                 
                 # y（二次元じゃないとStandardScaleできないので，どうせnp.ndarrayになることを見越して変換して二次元化した）
                 scaler_y = StandardScaler()
@@ -81,7 +81,7 @@ class ensemble_outlier_sample_detection:
                     }
 
                     # 設定したself.max_componentsより有効なサンプル数が少ない場合があるので，それを求める．
-                    max_components = min(self.max_components, np.linalg.matrix_rank(X_bootstrap_selected))
+                    max_components = min(self.max_components, np.linalg.matrix_rank(X_bootstrapped))
 
                     # n_componentsの最適化
                     def objective(trial):
@@ -92,7 +92,7 @@ class ensemble_outlier_sample_detection:
                         estimator = model(**params, **fixed_params)
                         
                         # Out-of-Foldのyを得る（bootstrapをしている時点ですべてもうランダムに分割されていると考え，ここではshuffleしない．）
-                        y_pred_oof = cross_val_predict(estimator, X_bootstrap_selected, y_bootstrapped, cv = self.cv, n_jobs = self.n_jobs)
+                        y_pred_oof = cross_val_predict(estimator, X_bootstrapped, y_bootstrapped, cv = self.cv, n_jobs = self.n_jobs)
 
                         # scaleを元に戻してscoreを算出．（y_bootstrappedをcross_val_predictの引数にいれたため，同じ形（-1, 1)にすでになっているため，このままscalerを適用できる．
                         return self.metric(scaler_y.inverse_transform(y_pred_oof), scaler_y.inverse_transform(y_bootstrapped))
@@ -107,15 +107,15 @@ class ensemble_outlier_sample_detection:
                 estimator = model(**study.best_params, **fixed_params)
 
                 # fit
-                estimator.fit(X_bootstrap_selected, y_bootstrapped)
+                estimator.fit(X_bootstrapped, y_bootstrapped)
 
                 # predict
-                y_pred_on_bootstrapped = estimator.predict(X_selected)
+                y_pred = estimator.predict(X)
                 
                 # scaleを元に戻すしてSeriesとしたものを蓄積（inverse_transformしたものは2次元なのでflatten()）
-                srs_y.append(pd.Series(scaler_y.inverse_transform(y_pred_on_bootstrapped).flatten(), name = 'estimator{}'.format(j)))
+                srs_y_pred.append(pd.Series(scaler_y.inverse_transform(y_pred).flatten(), name = 'estimator{}'.format(j)))
             
-            df_y_pred = pd.concat(srs_y, axis = 1)
+            df_y_pred = pd.concat(srs_y_pred, axis = 1)
             df_y_pred.index = y.index
 
             # 前回の言うところ，「普通の」（外れ値ではない）サンプル
