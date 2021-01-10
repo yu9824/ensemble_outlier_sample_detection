@@ -1,5 +1,15 @@
 # ensemble_outlier_sample_detection
-外れサンプルを削除する手法．
+A method for removing outlier samples.
+
+## How to use.
+You can see more details in the [example](https://github.com/yu-9824/ensemble_outlier_sample_detection/tree/main/example).
+```python
+from ensemble_outlier_sample_detection import EnsembleOutlierSampleDetector
+
+elo = EnsembleOutlierSampleDetector(random_state = 334, n_jobs = -1)
+elo.fit(X, y)
+elo.outlier_support_    # boolean(np.ndarray)
+```
 
 ## Reference
 ### Paper
