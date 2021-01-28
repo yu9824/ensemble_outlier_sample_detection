@@ -44,6 +44,7 @@ class EnsembleOutlierSampleDetector(BaseEstimator):
         self.progress_bar = progress_bar
     
     def fit(self, X, y = None):
+        # ここでnp.ndarrayに変換されてしまう．
         X, y = check_X_y(X, y)
 
         # 引数関係の整理
@@ -100,7 +101,7 @@ class EnsembleOutlierSampleDetector(BaseEstimator):
             n_samples_remained = np.sum(~boolean_outlier_previous)
 
             # 各estimatorの出した結果を保存しておくリスト（最後にconcat）
-            srs_y_pred = []
+            y_preds = []
 
             # 各estimatorをoofで最適化したのち，予測結果を出す
             for j in range(self.n_estimators):
@@ -143,26 +144,25 @@ class EnsembleOutlierSampleDetector(BaseEstimator):
                 # predict
                 y_pred = estimator.predict(X)
                 
-                # scaleを元に戻すしてSeriesとしたものを蓄積（inverse_transformしたものは2次元なのでflatten()）
-                srs_y_pred.append(pd.Series(self.scaler_y.inverse_transform(y_pred).flatten(), name = 'estimator{}'.format(j)))
+                # scaleを元に戻すして貯めておく
+                y_preds.append(self.scaler_y.inverse_transform(y_pred))
 
                 # progressbarを一つ進める．
                 if self.progress_bar:
                     pbar.set_description(desc = '[iter {0} / {1}]'.format(self.n_iter_, self.max_iter))
                     pbar.update(1)
             
-            # アンサンブルした結果を一つのDataFrameにまとめる．
-            df_y_pred = pd.concat(srs_y_pred, axis = 1)
-            df_y_pred.index = y.index
+            # アンサンブルした結果を一つのnp.ndarrayにまとめる．
+            df_y_preds = pd.DataFrame(np.hstack(y_preds))
 
             # 前回の言うところ，「普通の」（外れ値ではない）サンプルだけを抽出
-            df_y_pred_normal = self._extract(df_y_pred, ~boolean_outlier_previous)
+            df_y_preds_normal = df_y_preds[~boolean_outlier_previous]
 
             # median_absolute_deviation（中央絶対偏差）
-            median_absolute_deviation = np.median(abs(df_y_pred_normal - df_y_pred_normal.median(axis = 1).median()))
+            median_absolute_deviation = np.median(abs(df_y_preds_normal - df_y_preds_normal.median(axis = 1).median()))
 
             # 偏差を求める
-            y_error = abs(y - df_y_pred.median(axis = 1)).to_numpy()
+            y_error = abs(y - df_y_preds.median(axis = 1)).to_numpy()
 
             # 所謂3σに変わる基準でそれを超えるならばoutlierであると一旦判定
             boolean_outlier = y_error > 3 * 1.4826 * median_absolute_deviation
