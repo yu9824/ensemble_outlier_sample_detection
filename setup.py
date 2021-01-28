@@ -5,7 +5,7 @@ with open('requirements.txt') as requirements_file:
 
 setup(
     name='ensemble_outlier_sample_detection',
-    version='0.0.1',
+    version='0.0.2',
     description='You can do outlier detection.',
     author='yu-9824',
     author_email='yu.9824@gmail.com',

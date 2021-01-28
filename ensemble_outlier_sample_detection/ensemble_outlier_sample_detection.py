@@ -8,66 +8,92 @@ from sklearn.model_selection import cross_val_predict
 from sklearn.utils import resample
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 from sklearn.svm import SVR
+from sklearn.utils import check_X_y, check_random_state, check_array
+from sklearn.utils.validation import check_is_fitted
+from sklearn.base import BaseEstimator
 import optuna
 
-class EnsembleOutlierSampleDetector:
+__all__ = [
+    'EnsembleOutlierSampleDetector'
+]
+
+
+
+class EnsembleOutlierSampleDetector(BaseEstimator):
     def __init__(self, method = 'pls', max_iter = 30, n_estimators = 100, random_state = None, cv = 5, metric = 'r2', n_jobs = 1, max_components = 30, progress_bar = True):
         '''
-        method: 'pls' or 'svr'
+        method: default; 'pls'. 'pls' or 'svr'
+        max_iter: default; 30. Maximum number of iteration.
         n_estimators: default; 100. int. The number of submodels.
-        n_jobs: default; 1(optunaがNoneじゃないため．)
+        random_state: default; None.
+        cv: default; 5. The value of the number of divisions to be made.
+        metric: default; 'r2'. Specify what scores should be considered when searching for outliers. 'r2' or 'rmse' or 'mae' or 'mse'.
+        n_jobs: default; 1 (due to optuna). If you enter a value other than 1, the reproducibility will not be complete.
+        max_components: default; 30. Maximum number of PLS's component.
+        progress_bar: default; True. Show progress bar or not.
         '''
-        if method in ('pls', 'PLS'):
-            self.method = 'pls'
-            self.max_components = max_components
-        elif method in ('svr', 'SVR'):
-            self.method = 'svr'
-        else:
-            raise NotImplementedError
-
-        if metric == 'r2':
-            self.metric = r2_score
-            self.direction = 'maximize'
-        elif metric == 'mse':
-            self.metric = mean_squared_error
-            self.direction = 'minimize'
-        elif metric == 'mae':
-            self.metric = mean_absolute_error
-            self.direction = 'minimize'
-        elif metric == 'rmse':
-            self.metric = lambda x, y:mean_squared_error(x, y, squared=False)
-            self.direction = 'minimize'
-        else:
-            raise NotImplementedError
-
+        super().__init__()
+        self.method = method
         self.max_iter = max_iter
         self.n_estimators = n_estimators
+        self.random_state = random_state
         self.cv = cv
+        self.metric = metric
         self.n_jobs = n_jobs
+        self.max_components = max_components
         self.progress_bar = progress_bar
+    
+    def fit(self, X, y = None):
+        X, y = check_X_y(X, y)
 
+        # 引数関係の整理
+        if self.method in ('pls', 'PLS'):
+            self.method = 'pls'
+        elif self.method in ('svr', 'SVR'):
+            self.method = 'svr'
+            self.max_components = float('inf')  # 使用しないが，形式上必要なため．
+        else:
+            raise NotImplementedError
+
+        if self.metric == 'r2':
+            self.metric = r2_score
+            self.direction = 'maximize'
+        elif self.metric == 'mse':
+            self.metric = mean_squared_error
+            self.direction = 'minimize'
+        elif self.metric == 'mae':
+            self.metric = mean_absolute_error
+            self.direction = 'minimize'
+        elif self.metric == 'rmse':
+            self.metric = lambda x, y:mean_squared_error(x, y, squared = False)
+            self.direction = 'minimize'
+        else:
+            raise NotImplementedError
+        
+        # 乱数関係
+        self.RANGE = 2 ** 32
+        self.rng_ = check_random_state(self.random_state)
+
+        # optunaの試行回数
         self.max_iter_optuna = 100
 
-        self.RANGE = 10 ** 9    # sklearn用の乱数を発生させる範囲
-        np.random.seed(random_state)
+        # optunaのログを非表示
+        optuna.logging.disable_default_handler()    
 
-    
-    def fit(self, X, y):
+        # progress bar
         if self.progress_bar:
             pbar = tqdm(total = self.max_iter * self.n_estimators)
 
-        # Objectiveオブジェクトの中でも参照できるようにローカル変数にも値をおいておく
-        cv = self.cv
-        n_jobs = self.n_jobs
-        metric = self.metric
+        # 入力されたXを取っておく必要があるため．
+        X_original = X.copy()
 
-        X_original = X
-
+        # サンプル数
         n_samples = len(X_original)
         
-        boolean_outlier = np.zeros(n_samples, dtype = bool)
+        # 初期配列の定義
+        boolean_outlier = np.zeros(n_samples, dtype = np.bool)
         boolean_outlier_previous = boolean_outlier.copy()
-        for i in range(self.max_iter):
+        for self.n_iter_ in range(self.max_iter):
             # 前回の外れサンプル判定の結果残るサンプル
             X_remained = self._extract(X_original, i = ~boolean_outlier_previous)
             y_remained = self._extract(y, i = ~boolean_outlier_previous)
@@ -79,87 +105,50 @@ class EnsembleOutlierSampleDetector:
             # 各estimatorをoofで最適化したのち，予測結果を出す
             for j in range(self.n_estimators):
                 # いわゆるBootstrap．毎回違うbootstrapにするため．np.random.randintでrandom_stateを規定
-                X_bootstrapped, y_bootstrapped = resample(X_remained, y_remained, random_state = np.random.randint(self.RANGE), n_samples = n_samples_remained)
+                self.X_bootstrapped, self.y_bootstrapped = resample(X_remained, y_remained, random_state = self.rng_.randint(self.RANGE), n_samples = n_samples_remained)
 
                 # 分散が0の（特徴量がすべてのサンプルで同じ値をとる）特徴量を削除
                 selector = VarianceThreshold(threshold = 0)
-                X_bootstrapped = selector.fit_transform(X_bootstrapped)
+                self.X_bootstrapped = selector.fit_transform(self.X_bootstrapped)
                 X = selector.transform(X_original)
 
                 # 標準化したもので置き換える
                 # X
                 scaler_X = StandardScaler()
-                X_bootstrapped = scaler_X.fit_transform(X_bootstrapped)
+                self.X_bootstrapped = scaler_X.fit_transform(self.X_bootstrapped)
                 X = scaler_X.transform(X)
                 
                 # y（二次元じゃないとStandardScaleできないので，どうせnp.ndarrayになることを見越して変換して二次元化した）
-                scaler_y = StandardScaler()
-                y_bootstrapped = scaler_y.fit_transform(np.array(y_bootstrapped).reshape(-1, 1))
+                self.scaler_y = StandardScaler()
+                self.y_bootstrapped = self.scaler_y.fit_transform(np.array(self.y_bootstrapped).reshape(-1, 1))
 
                 # PLS用のmax_componentsよりサンプル数が少なくなってしまう場合があるので．
                 if self.method == 'pls':
-                    max_components = min(self.max_components, np.linalg.matrix_rank(X_bootstrapped))
-                elif self.method == 'svr':
-                    max_components = self.max_iter_optuna
+                    self.max_components = min(self.max_components, np.linalg.matrix_rank(self.X_bootstrapped))
 
-                class Objective:
-                    def __init__(self, method):
-                        self.method = method
-                        if self.method == 'pls':
-                            self.model = PLSRegression
-                            self.fixed_params = {
-                                'scale':False,
-                            }
-                        elif self.method == 'svr':
-                            self.model = SVR
-                            self.fixed_params = {
-                                'kernel': 'rbf',
-                            }
-
-                    def __call__(self, trial):
-                        if self.method == 'pls':
-                        # suggest_intは[)区間ではなく，[]区間
-                            params = {
-                                'n_components' : trial.suggest_int('n_components', 1, max_components),
-                            }
-                        elif self.method == 'svr':
-                            params = {
-                                'C': trial.suggest_loguniform('C', 2 ** -5, 2 ** 11),
-                                'epsilon': trial.suggest_loguniform('epsilon', 2 ** -10, 2 ** 1),
-                                'gamma': trial.suggest_loguniform('gamma', 2 ** -20, 2 ** 11),
-                            }
-
-                        estimator = self.model(**params, **self.fixed_params)
-                        
-                        # Out-of-Foldのyを得る（bootstrapをしている時点ですべてもうランダムに分割されていると考え，ここではshuffleしない．）
-                        y_pred_oof = cross_val_predict(estimator, X_bootstrapped, y_bootstrapped, cv = cv, n_jobs = n_jobs)
-
-                        # scaleを元に戻してscoreを算出．（y_bootstrappedをcross_val_predictの引数にいれたため，同じ形（-1, 1)にすでになっているため，このままscalerを適用できる．
-                        return metric(scaler_y.inverse_transform(y_pred_oof), scaler_y.inverse_transform(y_bootstrapped))
-
-                objective = Objective(method = self.method)
+                # インスタンスの生成
+                objective = Objective(elo = self)
 
                 # 最適化
-                optuna.logging.disable_default_handler()    # optunaのログを非表示
-                sampler = optuna.samplers.TPESampler(seed = np.random.randint(self.RANGE))    # 再現性確保
+                sampler = optuna.samplers.TPESampler(seed = self.rng_.randint(self.RANGE))    # 再現性確保
                 study = optuna.create_study(sampler = sampler, direction = self.direction)
-                study.optimize(objective, n_trials = min(self.max_iter_optuna, max_components), n_jobs = self.n_jobs)
+                study.optimize(objective, n_trials = min(self.max_iter_optuna, self.max_components), n_jobs = self.n_jobs)
 
                 # 最適なモデルを定義
                 estimator = objective.model(**study.best_params, **objective.fixed_params)
 
                 # fit
-                estimator.fit(X_bootstrapped, y_bootstrapped)
+                estimator.fit(self.X_bootstrapped, self.y_bootstrapped)
 
                 # predict
                 y_pred = estimator.predict(X)
                 
                 # scaleを元に戻すしてSeriesとしたものを蓄積（inverse_transformしたものは2次元なのでflatten()）
-                srs_y_pred.append(pd.Series(scaler_y.inverse_transform(y_pred).flatten(), name = 'estimator{}'.format(j)))
+                srs_y_pred.append(pd.Series(self.scaler_y.inverse_transform(y_pred).flatten(), name = 'estimator{}'.format(j)))
 
                 # progressbarを一つ進める．
                 if self.progress_bar:
-                    pbar.set_description(desc = '[iter {0} / {1}]'.format(i, self.max_iter))
+                    pbar.set_description(desc = '[iter {0} / {1}]'.format(self.n_iter_, self.max_iter))
                     pbar.update(1)
             
             # アンサンブルした結果を一つのDataFrameにまとめる．
@@ -177,30 +166,83 @@ class EnsembleOutlierSampleDetector:
 
             # 所謂3σに変わる基準でそれを超えるならばoutlierであると一旦判定
             boolean_outlier = y_error > 3 * 1.4826 * median_absolute_deviation
+
+            # 外れサンプル判定に変更がなかったら．
             if np.all(boolean_outlier == boolean_outlier_previous) or np.sum(~boolean_outlier) == 0:
                 self.outlier_support_ = boolean_outlier
-                self.iter_finished = i
+                self.inlier_support_ = ~self.outlier_support_
+                self.n_iter_finished = self.n_iter_
                 break
             else:
                 boolean_outlier_previous = boolean_outlier.copy()
             
-            # プログレスバーを閉じる
-            if self.progress_bar:
-                pbar.close()
+        # プログレスバーを閉じる
+        if self.progress_bar:
+            pbar.set_description(desc = '[iter {0} / {1}]'.format(self.n_iter_finished + 1, self.max_iter))
+            pbar.update((self.max_iter - (self.n_iter_finished + 1)) * self.n_estimators)
+            pbar.close()
+
+    def get_outlier_support(self):
+        '''
+        You can get outlier support_.
+        '''
+        check_is_fitted(self, ['outlier_support_', 'inlier_support_'])
+        return self.outlier_support_
+
+    def get_inlier_support(self):
+        '''
+        You can get inlier support_.
+        '''
+        check_is_fitted(self, ['outlier_support_', 'inlier_support_'])
+        return self.inlier_support_
             
     def _extract(self, X, i):
         return X.iloc[i] if isinstance(X, pd.DataFrame) else X[i]
 
-      
+class Objective:
+    def __init__(self, elo):
+        self.elo = elo
+        if elo.method == 'pls':
+            self.model = PLSRegression
+            self.fixed_params = {
+                'scale':False,
+            }
+        elif elo.method == 'svr':
+            self.model = SVR
+            self.fixed_params = {
+                'kernel': 'rbf',
+            }
+
+    def __call__(self, trial):
+        if self.elo.method == 'pls':
+        # suggest_intは[)区間ではなく，[]区間
+            params = {
+                'n_components' : trial.suggest_int('n_components', 1, self.elo.max_components),
+            }
+        elif self.elo.method == 'svr':
+            params = {
+                'C': trial.suggest_loguniform('C', 2 ** -5, 2 ** 11),
+                'epsilon': trial.suggest_loguniform('epsilon', 2 ** -10, 2 ** 1),
+                'gamma': trial.suggest_loguniform('gamma', 2 ** -20, 2 ** 11),
+            }
+
+        estimator = self.model(**params, **self.fixed_params)
+        
+        # Out-of-Foldのyを得る（bootstrapをしている時点ですべてもうランダムに分割されていると考え，ここではshuffleしない．）
+        y_pred_oof = cross_val_predict(estimator, self.elo.X_bootstrapped, self.elo.y_bootstrapped, cv = self.elo.cv, n_jobs = self.elo.n_jobs)
+
+        # scaleを元に戻してscoreを算出．（y_bootstrappedをcross_val_predictの引数にいれたため，同じ形（-1, 1)にすでになっているため，このままscalerを適用できる．
+        return self.elo.metric(self.elo.scaler_y.inverse_transform(y_pred_oof), self.elo.scaler_y.inverse_transform(self.elo.y_bootstrapped))  
 
 if __name__ == '__main__':
     from pdb import set_trace
-    example_path = 'https://raw.githubusercontent.com/hkaneko1985/ensemble_outlier_sample_detection/0583863a8381dcde5562197e2398d906c313256f/numerical_simulation_data.csv'
+
+    example_path = 'example/example_chache.csv'
     df = pd.read_csv(example_path, index_col = 0)
     X = df.iloc[:, 1:]
     y = df.iloc[:, 0]
 
-    elo = EnsembleOutlierSampleDetector(random_state=334, n_jobs = -1, cv = 5)
+    elo = EnsembleOutlierSampleDetector(random_state = 334, n_jobs = -1, cv = 5)
     elo.fit(X, y)
     
     set_trace()
