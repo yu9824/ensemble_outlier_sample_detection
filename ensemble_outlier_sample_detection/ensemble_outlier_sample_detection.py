@@ -2,6 +2,7 @@
 Copyright © 2021 yu9824
 '''
 
+import sys
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
@@ -16,26 +17,7 @@ from sklearn.utils.validation import check_is_fitted
 from sklearn.base import BaseEstimator
 import optuna
 
-# https://blog.amedama.jp/entry/detect-jupyter-env
-def is_env_notebook():
-    """Determine wheather is the environment Jupyter Notebook
-
-    Returns
-    -------
-    bool
-        Returns True if the code is running on the jupyter notebook.
-    """
-    if 'get_ipython' not in globals():
-        # Python shell
-        return False
-    env_name = get_ipython().__class__.__name__
-    if env_name == 'TerminalInteractiveShell':
-        # IPython shell
-        return False
-    # Jupyter Notebook
-    return True
-
-if is_env_notebook():
+if 'ipykernel' in sys.modules:
     from tqdm.notebook import tqdm
 else:
     from tqdm import tqdm
@@ -59,7 +41,7 @@ class EnsembleOutlierSampleDetector(BaseEstimator):
         metric : str, optional
             Specify what scores should be considered when searching for outliers. 'r2' or 'rmse' or 'mae' or 'mse'., by default 'r2'
         n_jobs : int, optional
-            If you enter a value other than 1, the reproducibility will not be complete., by default 1
+            , by default 1
         max_components : int, optional
             Maximum number of PLS's component., by default 30
         progress_bar : bool, optional
@@ -166,7 +148,7 @@ class EnsembleOutlierSampleDetector(BaseEstimator):
                 # 最適化
                 sampler = optuna.samplers.TPESampler(seed = self.rng_.randint(self.RANGE))    # 再現性確保
                 study = optuna.create_study(sampler = sampler, direction = self.direction)
-                study.optimize(objective, n_trials = min(self.max_iter_optuna, self.max_components), n_jobs = self.n_jobs)
+                study.optimize(objective, n_trials = min(self.max_iter_optuna, self.max_components))
 
                 # 最適なモデルを定義
                 estimator = objective.model(**study.best_params, **objective.fixed_params)
