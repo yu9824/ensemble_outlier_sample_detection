@@ -1,6 +1,9 @@
+'''
+Copyright © 2021 yu9824
+'''
+
 import pandas as pd
 import numpy as np
-from tqdm import tqdm
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.cross_decomposition import PLSRegression
@@ -13,25 +16,55 @@ from sklearn.utils.validation import check_is_fitted
 from sklearn.base import BaseEstimator
 import optuna
 
-__all__ = [
-    'EnsembleOutlierSampleDetector'
-]
+# https://blog.amedama.jp/entry/detect-jupyter-env
+def is_env_notebook():
+    """Determine wheather is the environment Jupyter Notebook
 
+    Returns
+    -------
+    bool
+        Returns True if the code is running on the jupyter notebook.
+    """
+    if 'get_ipython' not in globals():
+        # Python shell
+        return False
+    env_name = get_ipython().__class__.__name__
+    if env_name == 'TerminalInteractiveShell':
+        # IPython shell
+        return False
+    # Jupyter Notebook
+    return True
 
+if is_env_notebook():
+    from tqdm.notebook import tqdm
+else:
+    from tqdm import tqdm
 
 class EnsembleOutlierSampleDetector(BaseEstimator):
     def __init__(self, method = 'pls', max_iter = 30, n_estimators = 100, random_state = None, cv = 5, metric = 'r2', n_jobs = 1, max_components = 30, progress_bar = True):
-        '''
-        method: default; 'pls'. 'pls' or 'svr'
-        max_iter: default; 30. Maximum number of iteration.
-        n_estimators: default; 100. int. The number of submodels.
-        random_state: default; None.
-        cv: default; 5. The value of the number of divisions to be made.
-        metric: default; 'r2'. Specify what scores should be considered when searching for outliers. 'r2' or 'rmse' or 'mae' or 'mse'.
-        n_jobs: default; 1 (due to optuna). If you enter a value other than 1, the reproducibility will not be complete.
-        max_components: default; 30. Maximum number of PLS's component.
-        progress_bar: default; True. Show progress bar or not.
-        '''
+        """[summary]
+
+        Parameters
+        ----------
+        method : str, optional
+            'pls'. 'pls' or 'svr', by default 'pls'
+        max_iter : int, optional
+            Maximum number of iteration., by default 30
+        n_estimators : int, optional
+            The number of submodels., by default 100
+        random_state : None, int or instance of RandomState, optional
+            , by default None
+        cv : int, optional
+            The value of the number of divisions to be made., by default 5
+        metric : str, optional
+            Specify what scores should be considered when searching for outliers. 'r2' or 'rmse' or 'mae' or 'mse'., by default 'r2'
+        n_jobs : int, optional
+            If you enter a value other than 1, the reproducibility will not be complete., by default 1
+        max_components : int, optional
+            Maximum number of PLS's component., by default 30
+        progress_bar : bool, optional
+            Show progress bar or not., by default True
+        """
         super().__init__()
         self.method = method
         self.max_iter = max_iter
@@ -232,7 +265,7 @@ class Objective:
         y_pred_oof = cross_val_predict(estimator, self.elo.X_bootstrapped, self.elo.y_bootstrapped, cv = self.elo.cv, n_jobs = self.elo.n_jobs)
 
         # scaleを元に戻してscoreを算出．（y_bootstrappedをcross_val_predictの引数にいれたため，同じ形（-1, 1)にすでになっているため，このままscalerを適用できる．
-        return self.elo.metric(self.elo.scaler_y.inverse_transform(y_pred_oof), self.elo.scaler_y.inverse_transform(self.elo.y_bootstrapped))  
+        return self.elo.metric(self.elo.scaler_y.inverse_transform(y_pred_oof), self.elo.scaler_y.inverse_transform(self.elo.y_bootstrapped))
 
 if __name__ == '__main__':
     from pdb import set_trace
