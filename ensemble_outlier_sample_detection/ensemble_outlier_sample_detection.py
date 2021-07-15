@@ -42,7 +42,7 @@ else:
 
 class EnsembleOutlierSampleDetector(BaseEstimator):
     def __init__(self, method = 'pls', max_iter = 30, n_estimators = 100, random_state = None, cv = 5, metric = 'r2', n_jobs = 1, max_components = 30, progress_bar = True):
-        """[summary]
+        """You can do outlier detection.
 
         Parameters
         ----------
