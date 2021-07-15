@@ -1,8 +1,12 @@
-# ensemble_outlier_sample_detection
+# Ensemble Outlier Sample Detection
+![python_badge](https://img.shields.io/pypi/pyversions/ensemble-outlier-sample-detection)
+![license_badge](https://img.shields.io/pypi/l/ensemble-outlier-sample-detection)
+![Total_Downloads_badge](https://pepy.tech/badge/ensemble-outlier-sample-detection)
+
 A method for removing outlier samples.
 
 ## How to use.
-You can see more details in the [example](https://github.com/yu-9824/ensemble_outlier_sample_detection/tree/main/example).
+You can see more details in the [example](https://github.com/yu9824/ensemble_outlier_sample_detection/tree/main/example).
 ```python
 from ensemble_outlier_sample_detection import EnsembleOutlierSampleDetector
 
