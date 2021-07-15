@@ -193,7 +193,7 @@ class EnsembleOutlierSampleDetector(BaseEstimator):
             
         # プログレスバーを閉じる
         if self.progress_bar:
-            pbar.set_description(desc = '[iter {0} / {1}]'.format(self.n_iter_finished + 1, self.max_iter))
+            pbar.set_description(desc = 'Finished! [iter {0} / {1}]'.format(self.n_iter_finished + 1, self.max_iter))
             pbar.update((self.max_iter - (self.n_iter_finished + 1)) * self.n_estimators)
             pbar.close()
 
