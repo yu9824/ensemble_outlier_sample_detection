@@ -12,5 +12,5 @@ __app_name__ = 'ensemble_outlier_sample_detection'
 __url__ = 'https://github.com/yu-9824/ensemble_outlier_sample_detection/'
 
 __all__ = [
-    'main',
-    ]
+    'EnsembleOutlierSampleDetector'
+]
