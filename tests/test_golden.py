@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from _golden_cases import (
+    MEDIAN_TOLERANCE,
     GoldenCaseError,
     case_paths,
     compare_result,
@@ -93,7 +94,7 @@ def test_matches_modern_golden(
             "modern",
             golden_case["modern"]["result"],
             detector_result(fitted_detector),
-            compare_median=True,
+            median_tolerance=MEDIAN_TOLERANCE[golden_case["params"]["method"]],
         )
     )
 
@@ -124,12 +125,13 @@ def as_golden(result: dict[str, Any]) -> dict[str, Any]:
 
 
 GOLDEN = as_golden(synthetic_result([0, 1, 2]))
+STRICT = MEDIAN_TOLERANCE["pls"]
 
 
 def test_compare_result_accepts_identical_result() -> None:
     actual = synthetic_result([0, 1, 2])
     message = compare_result(
-        "pls-r2", "modern", GOLDEN, actual, compare_median=True
+        "pls-r2", "modern", GOLDEN, actual, median_tolerance=STRICT
     )
     assert message is None
 
@@ -185,7 +187,7 @@ def test_compare_result_reports_median_outside_tolerance() -> None:
     actual = synthetic_result([0, 1, 2])
     actual["median_prediction"][5] += 1e-6
     message = compare_result(
-        "svr-r2", "modern", GOLDEN, actual, compare_median=True
+        "svr-r2", "modern", GOLDEN, actual, median_tolerance=STRICT
     )
     assert message is not None
     lines = message.splitlines()
@@ -200,9 +202,28 @@ def test_compare_result_accepts_median_within_tolerance() -> None:
     actual = synthetic_result([0, 1, 2])
     actual["median_prediction"] += 1e-12
     message = compare_result(
-        "svr-r2", "modern", GOLDEN, actual, compare_median=True
+        "svr-r2", "modern", GOLDEN, actual, median_tolerance=STRICT
     )
     assert message is None
+
+
+def test_svr_median_tolerance_absorbs_platform_noise_only() -> None:
+    svr = MEDIAN_TOLERANCE["svr"]
+    platform_noise = synthetic_result([0, 1, 2])
+    platform_noise["median_prediction"] *= 1 + 5e-4
+    assert (
+        compare_result(
+            "svr-mse", "modern", GOLDEN, platform_noise, median_tolerance=svr
+        )
+        is None
+    )
+    retuned = synthetic_result([0, 1, 2])
+    retuned["median_prediction"][5] += 0.05
+    message = compare_result(
+        "svr-mse", "modern", GOLDEN, retuned, median_tolerance=svr
+    )
+    assert message is not None
+    assert "indices [5]" in message
 
 
 def test_compare_result_ignores_median_unless_requested() -> None:

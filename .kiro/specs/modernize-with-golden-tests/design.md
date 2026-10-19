@@ -519,7 +519,7 @@ def make_progress_bar(enabled: bool, total: int) -> tqdm: ...
 - case の `data.sha256` と CSV が一致しなければ、テストを失敗させる
 - 1 つの case につき 1 回だけ fit する（module scope でキャッシュする）。その結果を使って次の 2 つを検証する
   - `test_matches_legacy_golden`: `outlier_support_`、`inlier_support_`、`n_iter_` が `legacy.result` と完全に一致する（2.1）
-  - `test_matches_modern_golden`: mask と `n_iter_` が完全に一致し、`_median_prediction` が `np.testing.assert_allclose(rtol=1e-7, atol=1e-10)` で一致する（2.8）
+  - `test_matches_modern_golden`: mask と `n_iter_` が完全に一致し、`_median_prediction` が `np.testing.assert_allclose` で一致する。許容誤差は手法ごとに決め、PLS は `rtol=1e-7, atol=1e-10`、SVR は `rtol=1e-3, atol=1e-3` にする（2.8。SVR はプラットフォームの差を吸収するため。Open Questions を参照）
 - 失敗メッセージには、case 名、一致しないサンプルの index（最大 20 件）、期待値と実際の反復回数を含める（2.2）
 - session scope の autouse fixture で、テストの開始時と終了時に `tests/golden/cases/*.json` の SHA-256 を比べ、変わっていたら失敗させる（2.3）
 
@@ -689,6 +689,7 @@ def make_progress_bar(enabled: bool, total: int) -> tqdm: ...
     - (b) case ファイルの `modern` ブロックに、環境ごとの variant を持たせる（`schema_version` を 2 に上げる）
     - (c) 一致しない環境では、`modern` の比較を明示的に skip する
   - mask と反復回数がずれた場合は、(a) では対処できないので、(b) か (c) になる
+  - **結果（2026-10-19、Phase 1 のチェックポイント）**: CI の全 5 セルで、SVR の中央値だけがずれた。相対差は最大 4.3e-4 で、値はどのセルでも同じなので、原因は依存の版ではなくプラットフォームの違い。mask、反復回数、PLS は一致した。メンテナーの承認を得て (a) を採り、SVR の中央値の許容誤差だけを `rtol=1e-3, atol=1e-3` にした。PLS は `rtol=1e-7, atol=1e-10` のまま
 
 ## Security Considerations
 - PyPI と TestPyPI へは trusted publishing（OIDC）で公開し、API トークンをリポジトリに置かない。`id-token: write` は公開ジョブにだけ付ける

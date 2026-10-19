@@ -22,9 +22,17 @@ CASES_DIR = TESTS_DIR / "golden" / "cases"
 SCHEMA_VERSION = 1
 MASK_KEYS = ("outlier_support", "inlier_support")
 MAX_SHOWN_SAMPLES = 20
-# Tolerance for median_prediction against the modern block (2.8).
-MEDIAN_RTOL = 1e-7
-MEDIAN_ATOL = 1e-10
+# (rtol, atol) for median_prediction against the modern block (2.8), by
+# method. SVR medians differ by up to ~4e-4 (relative) between the macOS
+# arm64 machine that generated the golden and Linux x86_64 CI runners,
+# whatever the dependency versions, so SVR uses a looser tolerance that
+# still catches a change in the selected hyperparameters (see
+# tests/golden/README.md).
+Tolerance = tuple[float, float]
+MEDIAN_TOLERANCE: dict[str, Tolerance] = {
+    "pls": (1e-7, 1e-10),
+    "svr": (1e-3, 1e-3),
+}
 
 
 class GoldenCaseError(Exception):
@@ -128,16 +136,16 @@ def mask_problem(key: str, expected: ArrayLike, actual: ArrayLike) -> str:
     return f"{key}: {describe_samples(indices, expected_mask.size)}"
 
 
-def median_problem(expected: ArrayLike, actual: ArrayLike) -> str:
+def median_problem(
+    expected: ArrayLike, actual: ArrayLike, tolerance: Tolerance
+) -> str:
     """Return how median predictions differ beyond the tolerance, or ""."""
+    rtol, atol = tolerance
     expected_median = np.asarray(expected, dtype=np.float64)
     actual_median = np.asarray(actual, dtype=np.float64)
     try:
         np.testing.assert_allclose(
-            actual_median,
-            expected_median,
-            rtol=MEDIAN_RTOL,
-            atol=MEDIAN_ATOL,
+            actual_median, expected_median, rtol=rtol, atol=atol
         )
     except AssertionError as error:
         detail = str(error).strip()
@@ -146,11 +154,7 @@ def median_problem(expected: ArrayLike, actual: ArrayLike) -> str:
     if actual_median.shape != expected_median.shape:
         return f"median_prediction: {detail}"
     close = np.isclose(
-        actual_median,
-        expected_median,
-        rtol=MEDIAN_RTOL,
-        atol=MEDIAN_ATOL,
-        equal_nan=True,
+        actual_median, expected_median, rtol=rtol, atol=atol, equal_nan=True
     )
     samples = describe_samples(
         np.flatnonzero(~close).tolist(), expected_median.size
@@ -164,22 +168,24 @@ def compare_result(
     expected: Mapping[str, Any],
     actual: Mapping[str, Any],
     *,
-    compare_median: bool = False,
+    median_tolerance: Tolerance | None = None,
 ) -> str | None:
     """Compare a fitted result with a golden block.
 
-    The masks and ``n_iter`` must match exactly. With ``compare_median``,
-    ``median_prediction`` must also match within ``MEDIAN_RTOL`` and
-    ``MEDIAN_ATOL``. Returns None on a match, otherwise a failure message
-    naming the case, the differing sample indices, and both ``n_iter``.
+    The masks and ``n_iter`` must match exactly. With ``median_tolerance``
+    as ``(rtol, atol)``, ``median_prediction`` must also match within it.
+    Returns None on a match, otherwise a failure message naming the case,
+    the differing sample indices, and both ``n_iter``.
     """
     checks = [
         mask_problem(key, expected[key], actual[key]) for key in MASK_KEYS
     ]
-    if compare_median:
+    if median_tolerance is not None:
         checks.append(
             median_problem(
-                expected["median_prediction"], actual["median_prediction"]
+                expected["median_prediction"],
+                actual["median_prediction"],
+                median_tolerance,
             )
         )
     problems = [problem for problem in checks if problem]

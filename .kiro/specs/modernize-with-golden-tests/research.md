@@ -185,6 +185,7 @@ _実施日: 2026-10-19 / 対象: requirements.md（Requirement 1〜9）_
 - **Selected Approach**: 1 つの case ファイルに `legacy` ブロックと `modern` ブロックを持たせる。legacy は mask と反復回数を完全一致で比べる。modern は mask と反復回数を完全一致、予測の中央値を `rtol=1e-7`、`atol=1e-10` で比べる
 - **Rationale**: 当時の挙動への忠実さ（legacy）と、リファクタリングで数値が変わらないことの保証（modern）を両立できる
 - **Trade-offs**: Optuna が更新されると modern ブロックがずれる可能性があり、そのときは承認を得て更新する（2.5）
+- **Follow-up（2026-10-19、Phase 1 の CI）**: SVR の中央値は、macOS arm64（golden の生成環境）と Linux x86_64（CI）とで相対差が最大 4.3e-4 ずれた。値は Python 3.10〜3.14 のどのセルでも同じで、依存の版には左右されない。メンテナーの承認を得て、SVR だけ許容誤差を `rtol=1e-3, atol=1e-3` に緩めた。PLS は `rtol=1e-7, atol=1e-10` のまま
 
 ### Decision: golden の生成は「変更前のコード ＋ 名前付きパッチ」に一本化する
 - **Context**: 要件 1.8、1.9、1.10、6.3

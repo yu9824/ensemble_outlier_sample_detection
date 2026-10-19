@@ -18,7 +18,7 @@ case ファイル 1 つにつき、ブロックが 2 つある。
 | ブロック | 生成環境 | テストで比べるもの |
 |----------|----------|--------------------|
 | `legacy` | 2021 年環境（Python 3.8、NumPy 1.20、scikit-learn 0.24、pandas 1.2、Optuna 2.8） | `outlier_support`、`inlier_support`、`n_iter` を完全一致で比べる。`median_prediction` は参考として残すだけで、比べない |
-| `modern` | 最新環境（Python 3.12、NumPy 2.5、scikit-learn 1.9、pandas 3.0、Optuna 5.0） | mask と `n_iter` を完全一致で比べる。`median_prediction` は `rtol=1e-7`、`atol=1e-10` で比べる |
+| `modern` | 最新環境（Python 3.12、NumPy 2.5、scikit-learn 1.9、pandas 3.0、Optuna 5.0） | mask と `n_iter` を完全一致で比べる。`median_prediction` は、PLS を `rtol=1e-7`、`atol=1e-10` で、SVR を `rtol=1e-3`、`atol=1e-3` で比べる |
 
 `n_iter` は実行した反復の回数で、変更前のコードの `n_iter_finished + 1` にあたる。`median_prediction` は、最後の反復におけるアンサンブル予測の中央値（サンプルごと）である。各ブロックの `provenance` には、基準コミット、当てたパッチ、Python と依存の版、生成日時、生成した理由が入る。入力データは `example/example_chache.csv`（100 サンプル、10 特徴量）で、ファイルの SHA-256 を `data.sha256` に記録している。
 
@@ -119,6 +119,9 @@ params や入力データを変えた場合も、`--force --reason` がなけれ
 最新環境で `legacy` ブロック（mask と `n_iter`）との照合がずれた場合も、同じように扱う。2021 年環境は固定なので、作り直しても `unchanged` になり、ずれは解消しない。CI（Linux x86_64、Python ごとに依存の版が違う）でだけ一致しないセルが出た場合も、golden は更新しない。作業を止め、設計の Open Questions にある選択肢（許容誤差の見直し、環境ごとの variant、明示的な skip）をメンテナーに示して判断を仰ぐ。
 
 ## 知っておくこと
+
+SVR の中央値は、golden を生成した macOS arm64 と CI の Linux x86_64 とで、相対差が最大で約 4.3e-4、絶対差が最大で約 7.9e-4 ずれる（2026-10-19 の CI で確認）。ずれの値は Python 3.10〜3.14 のどのセルでも同じで、依存の版（NumPy 2.2〜2.5、scikit-learn 1.7〜1.9、pandas 2.3〜3.0）には左右されない。mask と `n_iter` は一致し、PLS の中央値も厳しい許容誤差のまま一致する。そこでメンテナーの承認を得て、SVR の中央値だけ許容誤差を `rtol=1e-3`、`atol=1e-3` に緩めた。Optuna の版の違いで選ばれるハイパーパラメータが変わると差は 0.6〜1.09 になるので、この許容誤差でもその種の変化は検出できる。
+
 
 SVR はどの構成でも外れ値を 1 件も検出せず、1 反復で収束する。mask がすべて `false` なので、SVR の mask の照合で見つかる変化は少ない。SVR の変化を実際に捕まえるのは、`modern` ブロックの中央値の照合である。
 
