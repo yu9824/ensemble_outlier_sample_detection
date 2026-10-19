@@ -43,7 +43,7 @@
   - 完了条件: 最新環境で 8 構成すべての fit がエラーなく終わり、自パッケージが原因の非推奨警告が出ない
   - _Requirements: 3.2, 3.3, 4.8_
 
-- [ ] 2.3 テストの土台と golden 回帰テストを作る
+- [x] 2.3 テストの土台と golden 回帰テストを作る
   - 参照データ（出典のコメント行を残したまま）を読み込む fixture、case ファイルを読み込む処理、データのハッシュ照合、テストの前後で golden が書き換えられていないかの確認を用意する
   - case ごとに 1 回だけ fit し、legacy ブロックとの完全一致と、modern ブロックとの一致（mask と反復回数は完全一致、中央値は許容誤差内）を検証する。失敗したときは、case 名と一致しないサンプルの index を表示する
   - 公開 import、バージョン、型情報のマーカーの存在を確かめるテストを書く
@@ -164,3 +164,4 @@
 - 1.3: 8 構成とも、共通パラメータのまま収束した（PARAM_OVERRIDES は空）。golden は macOS arm64 で生成したので、CI（Linux x86_64）で一致するかは 2.4 で初めて確かめる。依存の更新が原因かを診断する前に、`requirements-modern.txt` と `MODERN_VERSIONS` の両方を新しい版に合わせる必要がある
 - 2.1: pandas は Phase 1 の間、一時的に `[project] dependencies` に残している（コメントで、3.3 で外すと書いてある）。3.3 で pandas の import をやめるときに、依存からも外す。`__init__.py` には template の書き方に合わせた `Path` / `_version_file` が名前空間に残っているので、3.6 で `try/except ImportError` に置き換えるか、`del` する。eosd-modern には、パッケージが `--no-deps -e .` で入っている
 - 2.2: 最新環境で 8 構成とも legacy / modern の golden と一致し、中央値は modern とビット単位で同じ。`max_iter=0` を与えると UnboundLocalError になる（変更前から正しく動かなかった）ので、3.3 で正の整数を検証して ValueError にする。SVR では DataConversionWarning が 1 回あたり約 1 万件出る。3.3 で 1 次元の y を渡すようにすれば消える
+- 2.3: golden の照合ロジックは補助モジュール `tests/_golden_cases.py` にまとめ、conftest と test_golden からトップレベルの名前で import している。tests/ に `__init__.py` を置かない、pytest 既定の prepend import mode が前提。テスト全体は 34 件、約 28 秒。`ruff check tests` を実行すると、既存の `tests/golden/generate_golden.py:730` に ISC004 が 1 件出る（3.6 で直す）。Optuna のログを抑える処理（3.2 / 3.3）が入るまでは、失敗時の出力に INFO が大量に出るので、`-p no:logging` を付けると読みやすい
