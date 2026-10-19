@@ -74,7 +74,7 @@
   - _Boundary: Runtime_
   - _Requirements: 5.1, 5.2, 5.4, 5.6, 7.1, 7.3_
 
-- [ ] 3.3 検出器を scikit-learn 規約に沿って書き直し、3.1 と 3.2 の部品を組み込む
+- [x] 3.3 検出器を scikit-learn 規約に沿って書き直し、3.1 と 3.2 の部品を組み込む
   - コンストラクタ引数を書き換えず、正規化した値と途中の状態は fit の局所変数で持つ。`max_components` の累積最小値と、RNG から seed を引く順序は今のまま保つ
   - 入力検証（y がない、長さの不一致、欠損値・無限大、正の整数でない引数）、特徴量の数と列名の記録、`fit` が self を返すこと、再学習で結果を上書きすることを実装する
   - 予測行列の集約を NumPy で行い、未収束のときは最後の結果を属性に設定して ConvergenceWarning を出す。進捗バーは例外時も閉じる
@@ -169,3 +169,4 @@
 - 2.4: CI（Linux x86_64）で、SVR の中央値が macOS の golden から相対差で最大 4.3e-4 ずれた。値は全セルで同じ。メンテナーの承認を得て、SVR の許容誤差だけを rtol=atol=1e-3 に緩めた（コミット 7e8e8e8）。PLS は rtol=1e-7 / atol=1e-10 のまま
 - 2.4: draft PR #1 の CI（run 39201250407、HEAD 7e8e8e8）は、test 3.10〜3.14 と build がすべて成功した。test ジョブの所要時間は 65〜135 秒。CI は pull_request で起動するので、以降も PR #1 に push して確かめる
 - 3.2: Optuna の default handler は import 時点の sys.stderr を握っているので、capsys / capfd では出力を捕まえられない。そこで `tests/test_runtime.py` の fixture `optuna_stderr` が、テストの間だけ StreamHandler を足して確認する。autouse の `restore_optuna_logging` は、テストごとに verbosity、handler、propagate を元に戻す。3.5 の fit を通したテストでも、この 2 つを使い回す。3.5 では、例外で抜けた経路でも handler の状態が変わらないことを確かめる（レビューの FYI）。無効化した tqdm でも `tqdm.write` は出力されるので、検出器では使わない
+- 3.3: 書き直した検出器は、8 構成とも golden と一致する（modern の中央値はビット単位で同じ）。DataConversionWarning は 0 件になった。`tests/test_estimator.py` の 36 件が 3.4 の検証項目をほぼすべて先にカバーしているので、3.4 では差分を埋めるだけにする（`test_missing_y_raises` の match は "y is required" に強める）。`python -m ...ensemble_outlier_sample_detection` は、`__init__` が先にモジュールを import するので runpy の RuntimeWarning を stderr に出す。5.7 のテストでは、stderr が空であることを条件にしない。sklearn の `check_requires_y_none` は定型句 "requires y to be passed" がないので失敗する（spec では必須でない。3.6 で docstring と合わせて検討する）

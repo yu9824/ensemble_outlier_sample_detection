@@ -35,7 +35,6 @@ dependencies = [
     "scikit-learn>=1.6",
     "optuna>=3.0",
     "tqdm>=4.40",
-    "pandas",  # removed in Phase 2 (task 3.3)
 ]
 
 [project.optional-dependencies]
