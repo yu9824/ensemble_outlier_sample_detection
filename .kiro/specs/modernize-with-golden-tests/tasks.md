@@ -149,7 +149,7 @@
   - _Requirements: 7.6_
 
 - [ ] 6. 全体の統合検証
-- [ ] 6.1 最終ブランチで、テスト、lint、build、CI がすべて通ることと、要件が網羅されていることを確かめる
+- [x] 6.1 最終ブランチで、テスト、lint、build、CI がすべて通ることと、要件が網羅されていることを確かめる
   - 依存を新しく入れ直した最新環境で、テストスイート、lint、format の検査、型チェック、ビルドを実行し、自パッケージが原因の警告が出ないことを確かめる
   - CI の全ジョブの結果と、各テストジョブの所要時間を確かめる
   - 完了条件: ローカルと CI の両方ですべての検査が成功し、テストジョブがどれも 10 分以内に終わる
@@ -179,3 +179,4 @@
 - 5.2: 一時クローンに `v1.0.0` を付けてビルドすると、1.0.0 の sdist と wheel になる（METADATA も 1.0.0）。`v1.0.0-rc.1` は 1.0.0rc1 になる。PyPI と TestPyPI には、どちらも 0.1.0 のプロジェクトがすでにあるので、trusted publisher はプロジェクトの Publishing から登録する。実リポジトリのタグは `v0.1.0` だけで、変えていない
 - 5.3: CHANGELOG に書いた 0.1.0 の非互換は、実際に確かめた範囲に絞った（PLS の r2 / mse / mae は最新環境でも動いていた）。実際に壊れていたのは、NumPy 1.24〜1.26 の `np.bool`、scikit-learn 1.6 以降の rmse、すべての環境での SVR の 3 つ。CHANGELOG の見出しは `## [1.0.0] - Unreleased` なので、タグを付ける前に日付に書き換える（HOW_TO_RELEASE の手順 2 に追記した）
 - 5.4: notebook は、作業用の venv（`.[example]` を入れたもの）で `jupyter nbconvert --execute --inplace` を実行し、69 秒でエラーなく最後まで動いた（15 件の外れ値、3 反復）。pandas 3 では、文字列 index の Series を位置で引くとエラーになるので `.iloc` に直した。`sns.reset_defaults()` は matplotlib_inline の図の出力を止めてしまうので削除した。notebook 自身の評価関数も `(y_true, y_pred)` の順に直した。サイズは 5.5MB から 2.0MB になった（図が PNG だけになった）
+- 6.1: クリーンなクローン（HEAD 730814f）に新しい venv を作り、`pip install ".[test,dev]"` から検証した（numpy 2.5.4 / scikit-learn 1.9.1 / optuna 5.0.0 / pandas 3.0.6）。自パッケージが原因の Deprecation / FutureWarning をエラーにしたうえで、pytest は 192 passed。ruff check / format、mypy、build もすべて成功し、wheel に example/ と tests/ は入っていない。PR #1 の CI（run 39266971485）は全ジョブ成功で、test ジョブは 78〜148 秒
