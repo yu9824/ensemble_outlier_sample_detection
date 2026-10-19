@@ -141,7 +141,7 @@
   - _Boundary: UserDocs_
   - _Requirements: 7.4, 7.5_
 
-- [ ] 5.4 (P) example notebook を新しい API に直し、新しい環境で実行し直す
+- [x] 5.4 (P) example notebook を新しい API に直し、新しい環境で実行し直す
   - notebook 自身が使っている削除済みの API を置き換え、検出器を新しい API の書き方で呼ぶ
   - example 用の追加依存を入れた最新環境で、notebook を先頭から実行し、出力を更新する
   - 完了条件: notebook がエラーなく最後まで実行され、保存された出力が新しい API の実行結果になっている
@@ -178,3 +178,4 @@
 - 5.1: rc のタグは `v1.0.0-rc.1` の形でないと push のトリガーに一致しない（`v1.0.0rc1` は起動しない）。setuptools-scm は `1.0.0rc1` に正規化する。TestPyPI には安定版を含むすべてのタグを公開する。gh コマンドに渡すタグ名は、`${{ github.ref_name }}` を埋め込まず、引用符付きの `"$GITHUB_REF_NAME"` で参照する（スクリプトインジェクション対策。python-template にも同じ箇所があるが、本 spec の範囲外）。5.2 の手順書では、PyPI と TestPyPI の trusted publisher を登録するときに、environment 名（`pypi` / `testpypi`）を必ず指定するよう書く
 - 5.2: 一時クローンに `v1.0.0` を付けてビルドすると、1.0.0 の sdist と wheel になる（METADATA も 1.0.0）。`v1.0.0-rc.1` は 1.0.0rc1 になる。PyPI と TestPyPI には、どちらも 0.1.0 のプロジェクトがすでにあるので、trusted publisher はプロジェクトの Publishing から登録する。実リポジトリのタグは `v0.1.0` だけで、変えていない
 - 5.3: CHANGELOG に書いた 0.1.0 の非互換は、実際に確かめた範囲に絞った（PLS の r2 / mse / mae は最新環境でも動いていた）。実際に壊れていたのは、NumPy 1.24〜1.26 の `np.bool`、scikit-learn 1.6 以降の rmse、すべての環境での SVR の 3 つ。CHANGELOG の見出しは `## [1.0.0] - Unreleased` なので、タグを付ける前に日付に書き換える（HOW_TO_RELEASE の手順 2 に追記した）
+- 5.4: notebook は、作業用の venv（`.[example]` を入れたもの）で `jupyter nbconvert --execute --inplace` を実行し、69 秒でエラーなく最後まで動いた（15 件の外れ値、3 反復）。pandas 3 では、文字列 index の Series を位置で引くとエラーになるので `.iloc` に直した。`sns.reset_defaults()` は matplotlib_inline の図の出力を止めてしまうので削除した。notebook 自身の評価関数も `(y_true, y_pred)` の順に直した。サイズは 5.5MB から 2.0MB になった（図が PNG だけになった）
