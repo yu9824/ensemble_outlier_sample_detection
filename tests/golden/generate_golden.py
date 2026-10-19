@@ -727,8 +727,10 @@ def write_text(path: Path, text: str) -> None:
 def conflict_message(env: str, conflicts: list[Update]) -> str:
     """Explain why differing blocks are not overwritten."""
     lines = [
-        f"the {env} block of {len(conflicts)} case file(s) differs from "
-        "the new result; nothing was written:"
+        (
+            f"the {env} block of {len(conflicts)} case file(s) differs from "
+            "the new result; nothing was written:"
+        )
     ]
     for update in conflicts:
         lines.append(f"  - {update.name} ({update.path})")

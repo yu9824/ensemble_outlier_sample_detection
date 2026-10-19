@@ -10,9 +10,9 @@ You can see more details in the [example](https://github.com/yu9824/ensemble_out
 ```python
 from ensemble_outlier_sample_detection import EnsembleOutlierSampleDetector
 
-elo = EnsembleOutlierSampleDetector(random_state = 334, n_jobs = -1)
+elo = EnsembleOutlierSampleDetector(random_state=334, n_jobs=-1)
 elo.fit(X, y)
-elo.outlier_support_    # boolean(np.ndarray)
+elo.outlier_support_  # boolean(np.ndarray)
 ```
 
 ## Reference

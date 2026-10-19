@@ -549,7 +549,7 @@ def make_progress_bar(enabled: bool, total: int) -> tqdm: ...
 
 #### StaticAnalysisConfig（`ruff.toml`、`mypy.ini`）
 - `ruff.toml`
-  - `line-length = 79`、`indent-width = 4`、`extend-exclude = ["example"]`
+  - `line-length = 79`、`indent-width = 4`、`extend-exclude = ["example", ".kiro", ".claude"]`（ruff 0.17 は Markdown 内の Python コード片も整形するため、コードではない spec 文書とエージェント用の設定を除く。3.6 で追加）
   - `[lint] extend-select = ["D", "I"]`、`unfixable = ["F401"]`
   - `[lint.pydocstyle] convention = "numpy"`
   - `[lint.per-file-ignores] "tests/**" = ["D"]`

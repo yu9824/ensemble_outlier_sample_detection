@@ -1,5 +1,9 @@
 """Ensemble-based outlier sample detection for regression data.
 
+This module defines :class:`EnsembleOutlierSampleDetector` and the
+private helpers that tune one bootstrap submodel and judge the outliers
+of one iteration.
+
 Copyright © 2021 yu9824
 """
 
@@ -167,50 +171,120 @@ def _judge_outliers(
 class EnsembleOutlierSampleDetector(BaseEstimator):
     """Detect outlier samples of regression data with a submodel ensemble.
 
-    Each iteration fits ``n_estimators`` submodels (PLS or RBF-SVR) on
-    bootstrap samples of the current inliers, tunes each one with Optuna
-    on its out-of-fold score and predicts every sample. A sample whose
-    target is farther than ``3 * 1.4826 * MAD`` from the median
-    prediction is an outlier. The iterations stop when the outlier mask
-    no longer changes or no inlier is left.
+    Each iteration fits ``n_estimators`` submodels, PLS or RBF-kernel
+    SVR, on bootstrap samples of the current inliers. Each submodel is
+    tuned with Optuna's TPE sampler on its out-of-fold score and then
+    predicts every sample. A sample whose target is farther than
+    ``3 * 1.4826 * MAD`` from its median ensemble prediction, a robust
+    counterpart of the 3-sigma rule, is an outlier. The next iteration
+    leaves the outliers out of the bootstraps, and the iterations stop
+    when the outlier mask no longer changes. The method follows
+    Kaneko [1]_ and its reference implementation [2]_.
 
     Parameters
     ----------
     method : {"pls", "PLS", "svr", "SVR"}, default="pls"
-        Submodel type.
+        Submodel type: partial least squares regression or support
+        vector regression with an RBF kernel. ``"PLS"`` and ``"SVR"``
+        are accepted as aliases.
     max_iter : int, default=30
         Maximum number of iterations. Must be a positive integer.
     n_estimators : int, default=100
         Number of submodels per iteration. Must be a positive integer.
     random_state : int, RandomState instance or None, default=None
         Seeds the bootstraps and the Optuna samplers. Pass an int for
-        reproducible results.
+        reproducible results across calls.
     cv : int, default=5
-        Number of folds for the out-of-fold predictions.
+        Number of folds of the cross-validation that gives the
+        out-of-fold predictions.
     metric : {"r2", "mse", "mae", "rmse"}, default="r2"
-        Score that tunes the submodels. ``"r2"`` is maximized and the
-        others are minimized.
+        Score of the out-of-fold predictions that tunes the submodels.
+        ``"r2"`` is maximized; ``"mse"``, ``"mae"`` and ``"rmse"`` are
+        minimized.
     n_jobs : int or None, default=1
-        Number of jobs for the out-of-fold predictions.
+        Number of jobs that compute the out-of-fold predictions.
+        ``None`` means 1 unless in a :func:`joblib.parallel_backend`
+        context, and ``-1`` means all processors.
     max_components : int, default=30
         Maximum number of PLS components. Must be a positive integer.
-        Ignored for SVR.
+        It is validated but otherwise ignored for SVR.
     progress_bar : bool, default=True
         Whether to show a progress bar during ``fit``.
 
     Attributes
     ----------
-    outlier_support_ : ndarray of shape (n_samples,)
-        Boolean mask, True for the outlier samples.
-    inlier_support_ : ndarray of shape (n_samples,)
-        Boolean mask, True for the inlier samples.
+    outlier_support_ : ndarray of shape (n_samples,), dtype=bool
+        Mask of the outlier samples, True for an outlier.
+    inlier_support_ : ndarray of shape (n_samples,), dtype=bool
+        Mask of the inlier samples, ``~outlier_support_``.
     n_iter_ : int
-        Number of iterations run.
+        Number of iterations run, between 1 and ``max_iter``.
     n_features_in_ : int
         Number of features seen during ``fit``.
     feature_names_in_ : ndarray of shape (n_features_in_,)
         Names of the features seen during ``fit``. Defined only when
         ``X`` has feature names that are all strings.
+
+    See Also
+    --------
+    sklearn.cross_decomposition.PLSRegression : The PLS submodel.
+    sklearn.svm.SVR : The SVR submodel.
+
+    Notes
+    -----
+    One iteration of ``fit`` runs these steps.
+
+    1. Take the samples that the previous iteration judged as inliers,
+       or all samples in the first iteration.
+    2. For each of the ``n_estimators`` submodels, draw a bootstrap
+       sample of the same size from them, drop the features that are
+       constant in it and standardize ``X`` and ``y``. Tune the
+       hyperparameters with Optuna's TPE sampler, scoring the
+       out-of-fold predictions of ``cv``-fold cross-validation with
+       ``metric``. PLS searches ``n_components`` in ``[1, k]`` with
+       ``min(100, k)`` trials, where ``k`` starts at ``max_components``
+       and shrinks to the smallest rank of the standardized bootstrap
+       features seen so far. SVR searches ``C``, ``epsilon`` and
+       ``gamma`` on a log scale with 100 trials. The tuned submodel is
+       refitted on the bootstrap sample and predicts every sample.
+    3. Take the median of the ensemble predictions of each sample. The
+       MAD is the median absolute deviation of all the submodel
+       predictions for the previous inliers from the median of their
+       median predictions. A sample is an outlier when
+       ``|y - median| > 3 * 1.4826 * MAD``.
+
+    The iterations stop when the outlier mask equals that of the
+    previous iteration or every sample is an outlier. If neither
+    happens within ``max_iter`` iterations, ``fit`` warns with a
+    :class:`~sklearn.exceptions.ConvergenceWarning` and keeps the last
+    judgment. Optuna's per-trial logs are hidden during ``fit``, and
+    its global verbosity is restored afterwards.
+
+    References
+    ----------
+    .. [1] H. Kaneko, "Automatic outlier sample detection based on
+       regression analysis and repeated ensemble learning",
+       Chemometrics and Intelligent Laboratory Systems, vol. 177,
+       pp. 74-82, 2018. https://doi.org/10.1016/j.chemolab.2018.04.015
+    .. [2] H. Kaneko, ensemble_outlier_sample_detection.
+       https://github.com/hkaneko1985/ensemble_outlier_sample_detection
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from ensemble_outlier_sample_detection import (
+    ...     EnsembleOutlierSampleDetector,
+    ... )
+    >>> rng = np.random.RandomState(0)
+    >>> X = rng.normal(size=(50, 3))
+    >>> y = X @ np.array([1.0, -2.0, 0.5]) + 0.1 * rng.normal(size=50)
+    >>> y[0] += 20.0
+    >>> detector = EnsembleOutlierSampleDetector(
+    ...     n_estimators=5, max_components=3, random_state=0,
+    ...     progress_bar=False,
+    ... ).fit(X, y)
+    >>> np.flatnonzero(detector.outlier_support_)
+    array([0])
     """
 
     def __init__(
@@ -240,12 +314,18 @@ class EnsembleOutlierSampleDetector(BaseEstimator):
     ) -> "EnsembleOutlierSampleDetector":
         """Detect the outlier samples of ``(X, y)``.
 
+        Calling ``fit`` again overwrites the previous results. The
+        constructor parameters are never modified.
+
         Parameters
         ----------
         X : array-like of shape (n_samples, n_features)
-            Features. NaN and infinity are not allowed.
+            Features. NaN and infinity are not allowed. When ``X`` has
+            string column names, such as a pandas DataFrame, they are
+            stored in ``feature_names_in_``.
         y : array-like of shape (n_samples,)
-            Target values. Required despite the default ``None``.
+            Numeric target values. Required despite the default
+            ``None``, which exists only for scikit-learn compatibility.
 
         Returns
         -------
@@ -255,8 +335,11 @@ class EnsembleOutlierSampleDetector(BaseEstimator):
         Raises
         ------
         ValueError
-            If a parameter has an unsupported value, ``y`` is missing,
-            or ``X`` and ``y`` are inconsistent or not finite.
+            If ``method`` or ``metric`` is not one of the accepted
+            values, if ``max_iter``, ``n_estimators`` or
+            ``max_components`` is not a positive integer, if ``y`` is
+            None, or if ``X`` and ``y`` have different numbers of
+            samples or contain NaN, infinity or non-numeric values.
 
         Warns
         -----
@@ -272,9 +355,12 @@ class EnsembleOutlierSampleDetector(BaseEstimator):
             "max_components", self.max_components
         )
         if y is None:
+            # The first sentence is the phrase scikit-learn's
+            # check_requires_y_none looks for.
             raise ValueError(
-                "y is required: EnsembleOutlierSampleDetector judges "
-                "outliers by their target values, but y=None was given."
+                "EnsembleOutlierSampleDetector requires y to be passed, "
+                "but the target y is None. y is required because outliers "
+                "are judged by their target values; y=None is not allowed."
             )
         X_valid, y_valid = validate_data(self, X, y, y_numeric=True)
         rng = check_random_state(self.random_state)

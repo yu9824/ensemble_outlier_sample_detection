@@ -99,7 +99,7 @@
   - _Depends: 3.3_
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
 
-- [ ] 3.6 すべての公開 API に docstring と型ヒントを整え、lint・format・型チェックを通す
+- [x] 3.6 すべての公開 API に docstring と型ヒントを整え、lint・format・型チェックを通す
   - 公開クラスと公開メソッドに、NumPy スタイルの docstring（引数の取りうる値と既定値、戻り値、学習後の属性、例外）を書き、検出器にはアルゴリズムの概要と参照論文を書く
   - 公開 API と内部の関数・メソッドのすべてに型ヒントを付け、コード全体を整形する
   - 完了条件: lint、format の検査、型チェックが、ソースとテストの両方で違反なく通り、golden テストも通ったまま
@@ -172,3 +172,4 @@
 - 3.3: 書き直した検出器は、8 構成とも golden と一致する（modern の中央値はビット単位で同じ）。DataConversionWarning は 0 件になった。`tests/test_estimator.py` の 36 件が 3.4 の検証項目をほぼすべて先にカバーしているので、3.4 では差分を埋めるだけにする（`test_missing_y_raises` の match は "y is required" に強める）。`python -m ...ensemble_outlier_sample_detection` は、`__init__` が先にモジュールを import するので runpy の RuntimeWarning を stderr に出す。5.7 のテストでは、stderr が空であることを条件にしない。sklearn の `check_requires_y_none` は定型句 "requires y to be passed" がないので失敗する（spec では必須でない。3.6 で docstring と合わせて検討する）
 - 3.4: `tests/test_estimator.py` は 46 件。seed 8（2 反復で収束）と seed 14（3 反復で収束）は実測した値で、前提が崩れれば assert で明示的に失敗する。ConvergenceWarning は検出器の文言 "EnsembleOutlierSampleDetector did not converge" で絞って数えるので、submodel 由来の警告では誤って失敗しない
 - 3.5: 3.2 の `optuna_stderr` は fixture の中で `StreamHandler(sys.stderr)` を作っていた。pytest 9 では、これだと閉じた setup 段階の capsys ストリームに書き込み、陽性対照は logging error の報告に引用された文字列に一致して偶然通っていた。emit の時点の `sys.stderr` に書く `_CurrentStderrHandler` に替え、陽性対照は行頭で一致を確かめるようにした。fit を通すテストは、検出器モジュールの属性 `_runtime.make_progress_bar` / `_fit_predict_submodel` を差し替えている。検出器がこれらを `from ... import` の形に変えると、明示的なメッセージで失敗する
+- 3.6: ruff 0.17 は Markdown 内の Python コード片も整形対象にするので、ruff.toml の `extend-exclude` に `.kiro` と `.claude` を加え（design の StaticAnalysisConfig も更新）、README のコード片を整形した。y=None の ValueError には sklearn の定型句 "requires y to be passed" を加え、`check_requires_y_none` が通るようにした。docstring の Examples は通常の pytest では実行されない（`--doctest-modules src` を付ければ 1 件通る）。参照論文は Crossref で確認した（Kaneko 2018, Chemometr. Intell. Lab. Syst. 177, 74-82, DOI 10.1016/j.chemolab.2018.04.015）
