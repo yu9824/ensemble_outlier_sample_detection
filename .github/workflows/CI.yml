@@ -35,6 +35,7 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      lint: ${{ steps.filter.outputs.lint }}
     steps:
       # push のときは git の履歴を辿って差分を取るため、浅いクローンだと
       # 比較対象のコミットが手元に無くて失敗しうる。リポジトリが小さいので
@@ -58,6 +59,16 @@ jobs:
               - 'ruff.toml'
               - 'mypy.ini'
               - 'MANIFEST.in'
+              - '.github/workflows/CI.yml'
+            # ruff は Markdown 内の Python コード片も整形するので、lint は
+            # Markdown の変更でも走らせる。
+            lint:
+              - 'src/**'
+              - 'tests/**'
+              - '**/*.md'
+              - 'pyproject.toml'
+              - 'ruff.toml'
+              - 'mypy.ini'
               - '.github/workflows/CI.yml'
 
   test:
@@ -135,3 +146,29 @@ jobs:
             print(f"::error::{problem}")
         sys.exit(1 if problems else 0)
         EOF
+
+  lint:
+    needs: changes
+    if: needs.changes.outputs.lint == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup Python 3.13
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.13"
+    # mypy が numpy などの型情報を読めるよう、パッケージごと入れる。
+    - name: Install dependencies
+      run: |
+        pip install ".[dev]"
+    # 設定は ruff.toml と mypy.ini。
+    - name: Lint with ruff
+      run: |
+        ruff check .
+    - name: Check formatting with ruff
+      run: |
+        ruff format --check .
+    - name: Type check with mypy
+      run: |
+        mypy
