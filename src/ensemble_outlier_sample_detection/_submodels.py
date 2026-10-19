@@ -295,10 +295,8 @@ def make_objective(
         )
         # SVR returns 1-D predictions; scalers need a column.
         y_pred = scaler_y.inverse_transform(np.reshape(y_oof, (-1, 1)))
-        # TRANSITIONAL (P6): the arguments stay in the pre-refactoring
-        # order, score(y_pred, y_true), so that the golden results keep
-        # matching. Phase 3 (task 4.1) swaps them to the documented
-        # score(y_true, y_pred), which changes the result only for "r2".
-        return float(metric.score(y_pred, y_true))
+        # Definition order of scikit-learn metrics: score(y_true, y_pred).
+        # Only "r2" is not symmetric in its arguments (6.2).
+        return float(metric.score(y_true, y_pred))
 
     return objective

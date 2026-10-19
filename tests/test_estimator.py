@@ -27,7 +27,7 @@ SMALL: dict[str, Any] = {
     "method": "pls",
     "n_estimators": 2,
     "max_iter": 3,
-    "random_state": 8,
+    "random_state": 12,
     "n_jobs": 1,
     "progress_bar": False,
 }
@@ -35,7 +35,7 @@ N_ITER_SMALL = 2
 # With this seed instead, SMALL needs 3 iterations: the mask of
 # iteration 2 differs from that of iteration 1, and iteration 3 repeats
 # the mask of iteration 2.
-SEED_3_ITERATIONS = 14
+SEED_3_ITERATIONS = 8
 ARRAY_ATTRIBUTES = {
     "outlier_support_",
     "inlier_support_",

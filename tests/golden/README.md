@@ -32,7 +32,7 @@ case ファイル 1 つにつき、ブロックが 2 つある。
 | `modern-objective-shape` | 最新環境の全構成 | 目的関数の中の `inverse_transform` に渡す SVR の OOF 予測も、同じく列ベクトルに直す。新しい scikit-learn は 1 次元の入力を受け付けない。PLS の予測はもともと列ベクトルなので、PLS には影響しない（要件 1.10） |
 | `modern-rmse` | 最新環境の全構成 | `mean_squared_error(..., squared=False)` は削除されたので、`np.sqrt(mean_squared_error(...))` に置き換える（要件 1.10） |
 | `record-median` | 両方の環境の全構成 | 予測行列を作った直後に、中央値を `_median_prediction` に記録する。記録するだけで、計算は変えない（要件 1.10） |
-| `r2-argument-order` | `--patch r2-argument-order` を付けたときの r2 構成だけ | R² の引数順を定義どおりに直す。Phase 3 で r2 構成の golden を作り直すときに使う（要件 6.3）。初回の生成では当てていない |
+| `r2-argument-order` | `--patch r2-argument-order` を付けたときの r2 構成だけ | R² の引数順を定義どおりに直す（要件 6.3）。初回の生成では当てていない。Phase 3 で作り直してからは、`pls-r2` と `svr-r2` の両方のブロックをこのパッチ込みで生成している（パッケージの R² の修正に合わせるため）。r2 構成を作り直すときは、必ずこのパッチを付ける |
 
 ### 8 つの構成
 
@@ -40,11 +40,10 @@ case ファイル 1 つにつき、ブロックが 2 つある。
 
 | 構成 | 外れ値の数 | `n_iter` |
 |------|-----------:|---------:|
-| `pls-r2` | 15 | 8 |
-| `pls-mse` / `pls-mae` / `pls-rmse` | 15 | 7 |
+| `pls-r2` / `pls-mse` / `pls-mae` / `pls-rmse` | 15 | 7 |
 | `svr-r2` / `svr-mse` / `svr-mae` / `svr-rmse` | 0 | 1 |
 
-初回の生成では、どの構成も共通のパラメータのまま `max_iter` 内に収束した。そのため `generate_golden.py` の `PARAM_OVERRIDES` は空のままにしている（要件 1.6 の調整はなし）。
+初回の生成でも Phase 3 の再生成でも、どの構成も共通のパラメータのまま `max_iter` 内に収束した。そのため `generate_golden.py` の `PARAM_OVERRIDES` は空のままにしている（要件 1.6 の調整はなし）。R² の修正の前は、`pls-r2` の `n_iter` は 8 だった（外れ値の 15 件は修正の前後で同じ）。
 
 ## 環境の作り方
 
@@ -90,9 +89,9 @@ python tests/golden/generate_golden.py --env modern --force --reason "TEXT"
 
 # Phase 3: R² の修正を当てて、r2 構成だけを両方の環境で作り直す
 python tests/golden/generate_golden.py --env legacy --cases pls-r2 svr-r2 \
-    --patch r2-argument-order --force --reason "fix r2 argument order"
+    --patch r2-argument-order --force --reason "R² argument order fix (Req 6.3)"
 python tests/golden/generate_golden.py --env modern --cases pls-r2 svr-r2 \
-    --patch r2-argument-order --force --reason "fix r2 argument order"
+    --patch r2-argument-order --force --reason "R² argument order fix (Req 6.3)"
 
 # 診断用: golden の写しに対して実行し、tests/golden/cases は変えない
 cp -R tests/golden/cases /path/to/scratch/cases
@@ -109,7 +108,7 @@ case ファイルは手で編集しない。書き換えるのは生成スクリ
 
 テストが golden と一致しなくなったら、まず原因がどちらにあるかを切り分ける。
 
-1. 本パッケージのコードを変えたことが原因なら、golden は更新せずにコードを直す（要件 2.4）。
+1. 本パッケージのコードを変えたことが原因なら、golden は更新せずにコードを直す（要件 2.4）。例外は、Phase 3 の R² の修正（要件 6.3）のように、承認を得て検出結果を意図的に変える場合だけで、そのときは基準コミットに同じ修正を名前付きパッチとして当てて作り直す。
 2. 依存の更新が原因だと疑われるなら、変更前のコードを新しい依存で動かして、同じずれが出るかを確かめる。生成スクリプトは常に基準コミットのコードを動かすので、新しい依存の環境を作り、`requirements-modern.txt` と `generate_golden.py` の `MODERN_VERSIONS` をその版に合わせてから、上の診断用コマンド（`--env modern --cases-dir`）を実行すればよい。
 3. 診断で `unchanged` と出たなら、ずれの原因は依存ではなくコードにある。1 に戻る。
 4. 診断でテストと同じずれが出たときだけ、メンテナーの承認を得て `--force --reason` で更新し、下の更新履歴に 1 行足す。原因の切り分けの結果、依存の版、承認者を必ず書く（要件 2.5）。
@@ -120,12 +119,12 @@ params や入力データを変えた場合も、`--force --reason` がなけれ
 
 ## 知っておくこと
 
-SVR の中央値は、golden を生成した macOS arm64 と CI の Linux x86_64 とで、相対差が最大で約 4.3e-4、絶対差が最大で約 7.9e-4 ずれる（2026-10-19 の CI で確認）。ずれの値は Python 3.10〜3.14 のどのセルでも同じで、依存の版（NumPy 2.2〜2.5、scikit-learn 1.7〜1.9、pandas 2.3〜3.0）には左右されない。mask と `n_iter` は一致し、PLS の中央値も厳しい許容誤差のまま一致する。そこでメンテナーの承認を得て、SVR の中央値だけ許容誤差を `rtol=1e-3`、`atol=1e-3` に緩めた。Optuna の版の違いで選ばれるハイパーパラメータが変わると差は 0.6〜1.09 になるので、この許容誤差でもその種の変化は検出できる。
+SVR の中央値は、golden を生成した macOS arm64 と CI の Linux x86_64 とで、相対差が最大で約 4.3e-4、絶対差が最大で約 7.9e-4 ずれる（2026-10-19 の CI で確認）。ずれの値は Python 3.10〜3.14 のどのセルでも同じで、依存の版（NumPy 2.2〜2.5、scikit-learn 1.7〜1.9、pandas 2.3〜3.0）には左右されない。mask と `n_iter` は一致し、PLS の中央値も厳しい許容誤差のまま一致する。そこでメンテナーの承認を得て、SVR の中央値だけ許容誤差を `rtol=1e-3`、`atol=1e-3` に緩めた。Optuna の版の違いで選ばれるハイパーパラメータが変わると差は 0.59〜0.87 になるので、この許容誤差でもその種の変化は検出できる。
 
 
 SVR はどの構成でも外れ値を 1 件も検出せず、1 反復で収束する。mask がすべて `false` なので、SVR の mask の照合で見つかる変化は少ない。SVR の変化を実際に捕まえるのは、`modern` ブロックの中央値の照合である。
 
-2021 年環境と最新環境の中央値は、PLS では約 1.8e-15 しか違わないが、SVR では最大で約 1.09 違う（`svr-r2` が 1.09、`svr-mae` が 0.87、`svr-mse` と `svr-rmse` が 0.59）。Optuna 2.8 と 5.0 の TPE の違いで、選ばれるハイパーパラメータが変わるためと考えられる（PLS の探索は試行が少なくランダムサンプリングだけで終わるので、差が出ない）。mask と `n_iter` は、8 構成すべてで両方の環境が一致している。`legacy` の中央値を比べないのは、このためである。
+2021 年環境と最新環境の中央値は、PLS では約 1.8e-15 しか違わないが、SVR では最大で約 0.87 違う（`svr-mae` が 0.87、`svr-r2`、`svr-mse`、`svr-rmse` が 0.59。`svr-r2` は R² の修正の前は 1.09 だった）。Optuna 2.8 と 5.0 の TPE の違いで、選ばれるハイパーパラメータが変わるためと考えられる（PLS の探索は試行が少なくランダムサンプリングだけで終わるので、差が出ない）。mask と `n_iter` は、8 構成すべてで両方の環境が一致している。`legacy` の中央値を比べないのは、このためである。
 
 NumPy 2 では `np.bool` が `np.bool_` の別名として戻ったので、最新環境で `np.bool` を直すパッチは要らない。
 
@@ -141,3 +140,5 @@ golden は macOS arm64 で生成した。CI は Linux x86_64 で動くので、B
 |------|------|----------|------|----------------|----------|--------|
 | 2026-10-19 | 全 8 構成 | legacy | initial baseline | 該当なし（初回生成） | 3.8.20 / 1.20.1 / 1.6.2 / 0.24.1 / 1.2.4 / 2.8.0 / 4.59.0 | yu9824（spec の承認による） |
 | 2026-10-19 | 全 8 構成 | modern | initial baseline | 該当なし（初回生成） | 3.12.15 / 2.5.4 / 1.18.1 / 1.9.1 / 3.0.6 / 5.0.0 / 4.70.1 | yu9824（spec の承認による） |
+| 2026-10-19 | `pls-r2`、`svr-r2` | legacy | R² の引数順の修正（要件 6.3）。`r2-argument-order` を当てて再生成。`pls-r2` は `n_iter` が 8 から 7 に、両構成で中央値が変わった。mask は変わらない | コードの意図的な修正（R² を実測値・予測値の順に） | 3.8.20 / 1.20.1 / 1.6.2 / 0.24.1 / 1.2.4 / 2.8.0 / 4.59.0 | yu9824（spec 6.3 の承認による） |
+| 2026-10-19 | `pls-r2`、`svr-r2` | modern | R² の引数順の修正（要件 6.3）。`r2-argument-order` を当てて再生成。`pls-r2` は `n_iter` が 8 から 7 に、両構成で中央値が変わった。mask は変わらない | コードの意図的な修正（R² を実測値・予測値の順に） | 3.12.15 / 2.5.4 / 1.18.1 / 1.9.1 / 3.0.6 / 5.0.0 / 4.70.1 | yu9824（spec 6.3 の承認による） |

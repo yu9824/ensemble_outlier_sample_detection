@@ -1,4 +1,4 @@
-"""Unit tests for the submodel helpers (4.5, 4.6, 7.1, 7.3; P5/P6)."""
+"""Unit tests for the submodel helpers (4.5, 4.6, 6.2, 7.1, 7.3; P5)."""
 
 import dataclasses
 import warnings
@@ -127,6 +127,18 @@ def legacy_score(
         scaler_y.inverse_transform(np.reshape(y_oof, (-1, 1))),
         scaler_y.inverse_transform(y_2d),
     )
+
+
+def definition_order(
+    score: Callable[..., float],
+) -> Callable[[Any, Any], float]:
+    """Adapt ``score`` to the ``metric(y_pred, y_true)`` calls of ``Objective``.
+
+    The same adapter as the golden generator's ``r2-argument-order`` patch,
+    applied to every metric: the pre-refactoring ``Objective`` plus this
+    adapter is the reference after the R² fix (6.2, 6.3).
+    """
+    return lambda y_pred, y_true: score(y_true, y_pred)
 
 
 def legacy_trial_objective(
@@ -316,12 +328,12 @@ def test_make_objective_rejects_unnormalized_method(
         )
 
 
-# --- make_objective (P6 transitional argument order) ------------------------
+# --- make_objective (score(y_true, y_pred), 6.2) ---------------------------
 
 
 @pytest.mark.parametrize("metric_name", list(METRIC_TABLE))
 @pytest.mark.parametrize("method", ["pls", "svr"])
-def test_make_objective_scores_oof_in_transitional_order(
+def test_make_objective_scores_oof_y_true_first(
     method: Any,
     metric_name: str,
     train_data: tuple[NDArray[np.float64], NDArray[np.float64], Any],
@@ -343,17 +355,16 @@ def test_make_objective_scores_oof_in_transitional_order(
     y_pred = scaler_y.inverse_transform(y_oof.reshape(-1, 1))
     y_true = scaler_y.inverse_transform(y.reshape(-1, 1))
     score, _ = METRIC_TABLE[metric_name]
-    # P6: the objective still calls score(y_pred, y_true) until task 4.1.
-    assert value == score(y_pred, y_true)
+    assert value == score(y_true, y_pred)
 
-    # Regression guard: same value as the pre-refactoring Objective, which
-    # passed y as a 2-D column to cross_val_predict.
+    # Regression guard: same value as the pre-refactoring Objective (which
+    # passed y as a 2-D column to cross_val_predict) with the R² fix.
     assert value == legacy_score(
-        method, FIXED_PARAMS[method], score, X, y, scaler_y
+        method, FIXED_PARAMS[method], definition_order(score), X, y, scaler_y
     )
 
 
-def test_make_objective_r2_is_not_yet_y_true_first(
+def test_make_objective_r2_is_y_true_first(
     train_data: tuple[NDArray[np.float64], NDArray[np.float64], Any],
 ) -> None:
     X, y, scaler_y = train_data
@@ -365,10 +376,16 @@ def test_make_objective_r2_is_not_yet_y_true_first(
     y_oof = cross_val_predict(
         PLSRegression(n_components=1, scale=False), X, y, cv=CV
     )
-    y_pred = scaler_y.inverse_transform(y_oof.reshape(-1, 1))
-    y_true = scaler_y.inverse_transform(y.reshape(-1, 1))
-    assert value == r2_score(y_pred, y_true)
-    assert value != r2_score(y_true, y_pred)
+    y_pred = scaler_y.inverse_transform(y_oof.reshape(-1, 1)).ravel()
+    y_true = scaler_y.inverse_transform(y.reshape(-1, 1)).ravel()
+    assert value == r2_score(y_true, y_pred)
+    # R² by its definition, 1 - SS_res / SS_tot around the mean of y_true.
+    ss_res = np.sum((y_true - y_pred) ** 2)
+    ss_tot = np.sum((y_true - y_true.mean()) ** 2)
+    np.testing.assert_allclose(value, 1.0 - ss_res / ss_tot, rtol=1e-12)
+    # The old order is a different number on this data, so the test can
+    # tell the two apart.
+    assert value != r2_score(y_pred, y_true)
 
 
 @pytest.mark.parametrize(
@@ -401,7 +418,12 @@ def test_make_objective_matches_legacy_study(
     )
     old = run(
         legacy_trial_objective(
-            method, MAX_COMPONENTS, spec.score, X, y, scaler_y
+            method,
+            MAX_COMPONENTS,
+            definition_order(spec.score),
+            X,
+            y,
+            scaler_y,
         )
     )
     assert [t.params for t in new.trials] == [t.params for t in old.trials]

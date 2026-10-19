@@ -250,7 +250,7 @@ FAST: dict[str, Any] = {
     "method": "pls",
     "n_estimators": 2,
     "max_iter": 3,
-    "random_state": 8,
+    "random_state": 12,
     "n_jobs": 1,
 }
 N_ITER_FAST = 2

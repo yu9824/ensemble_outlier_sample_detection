@@ -111,7 +111,7 @@
   - _Requirements: 8.3, 8.4, 9.2, 9.3_
 
 - [ ] 4. Phase 3: R² の引数順を直す
-- [ ] 4.1 R² を定義どおりの順序で計算するように直し、r2 構成の golden だけを再生成する
+- [x] 4.1 R² を定義どおりの順序で計算するように直し、r2 構成の golden だけを再生成する
   - 目的関数が、評価関数を「実測値、予測値」の順で呼ぶように変える
   - golden 生成スクリプトで R² の修正パッチを指定し、2021 年環境と最新環境の両方で r2 の 2 構成だけを、理由を付けて再生成する。更新履歴に行を加える
   - 目的関数の値が、独立に計算した R² と一致することを確かめるテストを加える
@@ -174,3 +174,4 @@
 - 3.5: 3.2 の `optuna_stderr` は fixture の中で `StreamHandler(sys.stderr)` を作っていた。pytest 9 では、これだと閉じた setup 段階の capsys ストリームに書き込み、陽性対照は logging error の報告に引用された文字列に一致して偶然通っていた。emit の時点の `sys.stderr` に書く `_CurrentStderrHandler` に替え、陽性対照は行頭で一致を確かめるようにした。fit を通すテストは、検出器モジュールの属性 `_runtime.make_progress_bar` / `_fit_predict_submodel` を差し替えている。検出器がこれらを `from ... import` の形に変えると、明示的なメッセージで失敗する
 - 3.6: ruff 0.17 は Markdown 内の Python コード片も整形対象にするので、ruff.toml の `extend-exclude` に `.kiro` と `.claude` を加え（design の StaticAnalysisConfig も更新）、README のコード片を整形した。y=None の ValueError には sklearn の定型句 "requires y to be passed" を加え、`check_requires_y_none` が通るようにした。docstring の Examples は通常の pytest では実行されない（`--doctest-modules src` を付ければ 1 件通る）。参照論文は Crossref で確認した（Kaneko 2018, Chemometr. Intell. Lab. Syst. 177, 74-82, DOI 10.1016/j.chemolab.2018.04.015）
 - 3.7: lint ジョブは専用のフィルタ `lint`（コードのパスに `**/*.md` を加えたもの）で起動する。PR #1 の CI（run 39228883832、HEAD ea648b3）で、test 3.10〜3.14、build、lint のすべてが成功した。ruff と mypy は版を固定していないので、新しいリリースでコードを変えなくても lint が落ちることがありうる
+- 4.1: 目的関数は `score(y_true, y_pred)` の順で呼ぶようになった。r2 の golden は、`r2-argument-order` パッチを当てて legacy / modern の両方で作り直した。mask は変わらず、pls-r2 の n_iter は 8 から 7 になった。作り直した r2 の golden は mse の golden とビット単位で一致する（R² は MSE の単調関数なので、理論どおり）。既定の metric が r2 なので、テストの seed を実測し直した。`SMALL` / `FAST` は 12（2 反復で収束）、`SEED_3_ITERATIONS` は 8（3 反復で収束）。3.4 の note にある seed 8 / 14 は、修正前の値。今後 golden を `--force` で全構成作り直すときは、r2 の構成に必ず `--patch r2-argument-order` を付ける（生成スクリプトでは opt-in のまま）
