@@ -10,7 +10,7 @@ from sklearn.feature_selection import VarianceThreshold
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.model_selection import cross_val_predict
 from sklearn.utils import resample
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error, root_mean_squared_error
 from sklearn.svm import SVR
 from sklearn.utils import check_X_y, check_random_state, check_array
 from sklearn.utils.validation import check_is_fitted
@@ -81,7 +81,7 @@ class EnsembleOutlierSampleDetector(BaseEstimator):
             self.metric = mean_absolute_error
             self.direction = 'minimize'
         elif self.metric == 'rmse':
-            self.metric = lambda x, y:mean_squared_error(x, y, squared = False)
+            self.metric = root_mean_squared_error
             self.direction = 'minimize'
         else:
             raise NotImplementedError
@@ -107,9 +107,9 @@ class EnsembleOutlierSampleDetector(BaseEstimator):
         n_samples = len(X_original)
         
         # 初期配列の定義
-        boolean_outlier = np.zeros(n_samples, dtype = np.bool)
+        boolean_outlier = np.zeros(n_samples, dtype = bool)
         boolean_outlier_previous = boolean_outlier.copy()
-        for self.n_iter_ in range(self.max_iter):
+        for i_iter in range(self.max_iter):
             # 前回の外れサンプル判定の結果残るサンプル
             X_remained = self._extract(X_original, i = ~boolean_outlier_previous)
             y_remained = self._extract(y, i = ~boolean_outlier_previous)
@@ -160,15 +160,16 @@ class EnsembleOutlierSampleDetector(BaseEstimator):
                 y_pred = estimator.predict(X)
                 
                 # scaleを元に戻すして貯めておく
-                y_preds.append(self.scaler_y.inverse_transform(y_pred))
+                y_preds.append(self.scaler_y.inverse_transform(np.reshape(y_pred, (-1, 1))))
 
                 # progressbarを一つ進める．
                 if self.progress_bar:
-                    pbar.set_description(desc = '[iter {0} / {1}]'.format(self.n_iter_, self.max_iter))
+                    pbar.set_description(desc = '[iter {0} / {1}]'.format(i_iter, self.max_iter))
                     pbar.update(1)
             
             # アンサンブルした結果を一つのnp.ndarrayにまとめる．
             df_y_preds = pd.DataFrame(np.hstack(y_preds))
+            self._median_prediction = np.median(np.hstack(y_preds), axis=1)
 
             # 前回の言うところ，「普通の」（外れ値ではない）サンプルだけを抽出
             df_y_preds_normal = df_y_preds[~boolean_outlier_previous]
@@ -186,11 +187,14 @@ class EnsembleOutlierSampleDetector(BaseEstimator):
             if np.all(boolean_outlier == boolean_outlier_previous) or np.sum(~boolean_outlier) == 0:
                 self.outlier_support_ = boolean_outlier
                 self.inlier_support_ = ~self.outlier_support_
-                self.n_iter_finished = self.n_iter_
+                self.n_iter_finished = i_iter
                 break
             else:
                 boolean_outlier_previous = boolean_outlier.copy()
-            
+
+        # 実行した反復の回数（1始まり）
+        self.n_iter_ = i_iter + 1
+
         # プログレスバーを閉じる
         if self.progress_bar:
             pbar.set_description(desc = 'Finished! [iter {0} / {1}]'.format(self.n_iter_finished + 1, self.max_iter))
@@ -236,9 +240,9 @@ class Objective:
             }
         elif self.elo.method == 'svr':
             params = {
-                'C': trial.suggest_loguniform('C', 2 ** -5, 2 ** 11),
-                'epsilon': trial.suggest_loguniform('epsilon', 2 ** -10, 2 ** 1),
-                'gamma': trial.suggest_loguniform('gamma', 2 ** -20, 2 ** 11),
+                'C': trial.suggest_float('C', 2 ** -5, 2 ** 11, log=True),
+                'epsilon': trial.suggest_float('epsilon', 2 ** -10, 2 ** 1, log=True),
+                'gamma': trial.suggest_float('gamma', 2 ** -20, 2 ** 11, log=True),
             }
 
         estimator = self.model(**params, **self.fixed_params)
@@ -247,7 +251,7 @@ class Objective:
         y_pred_oof = cross_val_predict(estimator, self.elo.X_bootstrapped, self.elo.y_bootstrapped, cv = self.elo.cv, n_jobs = self.elo.n_jobs)
 
         # scaleを元に戻してscoreを算出．（y_bootstrappedをcross_val_predictの引数にいれたため，同じ形（-1, 1)にすでになっているため，このままscalerを適用できる．
-        return self.elo.metric(self.elo.scaler_y.inverse_transform(y_pred_oof), self.elo.scaler_y.inverse_transform(self.elo.y_bootstrapped))
+        return self.elo.metric(self.elo.scaler_y.inverse_transform(np.reshape(y_pred_oof, (-1, 1))), self.elo.scaler_y.inverse_transform(self.elo.y_bootstrapped))
 
 if __name__ == '__main__':
     from pdb import set_trace

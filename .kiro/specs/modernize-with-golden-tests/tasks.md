@@ -36,7 +36,7 @@
   - 完了条件: 最新環境で editable install ができ、`__version__` が unknown 以外を返す。ビルドした wheel に example とテストが含まれない
   - _Requirements: 3.1, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 8.1, 8.2_
 
-- [ ] 2.2 最新の依存で動かすための最小限の修正と、golden 照合に必要な契約変更を入れる
+- [x] 2.2 最新の依存で動かすための最小限の修正と、golden 照合に必要な契約変更を入れる
   - RMSE を新しい API で計算し、対数スケールの探索を新しい API に置き換える（パラメータの順序は変えない）。NumPy の bool の別名もやめる
   - SVR の予測を、fit の中と目的関数の中の両方で列ベクトルに揃え、SVR が動くようにする
   - 反復回数の属性を「実行した回数」に変え、最後の反復の中央値を private 属性に記録する
@@ -163,3 +163,4 @@
 - 1.2: 実測の結果、PLS（n_estimators=30）は 15 件が外れ値で、n_iter は r2 が 8、その他が 7。SVR は 0 件で n_iter は 1。legacy と modern で mask は一致する。中央値の差は、PLS が約 1.8e-15、SVR が最大で約 1.09（Optuna の差によるもの。README に書く）
 - 1.3: 8 構成とも、共通パラメータのまま収束した（PARAM_OVERRIDES は空）。golden は macOS arm64 で生成したので、CI（Linux x86_64）で一致するかは 2.4 で初めて確かめる。依存の更新が原因かを診断する前に、`requirements-modern.txt` と `MODERN_VERSIONS` の両方を新しい版に合わせる必要がある
 - 2.1: pandas は Phase 1 の間、一時的に `[project] dependencies` に残している（コメントで、3.3 で外すと書いてある）。3.3 で pandas の import をやめるときに、依存からも外す。`__init__.py` には template の書き方に合わせた `Path` / `_version_file` が名前空間に残っているので、3.6 で `try/except ImportError` に置き換えるか、`del` する。eosd-modern には、パッケージが `--no-deps -e .` で入っている
+- 2.2: 最新環境で 8 構成とも legacy / modern の golden と一致し、中央値は modern とビット単位で同じ。`max_iter=0` を与えると UnboundLocalError になる（変更前から正しく動かなかった）ので、3.3 で正の整数を検証して ValueError にする。SVR では DataConversionWarning が 1 回あたり約 1 万件出る。3.3 で 1 次元の y を渡すようにすれば消える
