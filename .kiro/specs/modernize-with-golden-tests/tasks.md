@@ -127,7 +127,7 @@
   - _Boundary: ReleaseWorkflow, DependabotConfig_
   - _Requirements: 9.5, 9.6, 9.7, 9.8_
 
-- [ ] 5.2 (P) リリース手順書を書き、タグから 1.0.0 としてビルドされることを確かめる
+- [x] 5.2 (P) リリース手順書を書き、タグから 1.0.0 としてビルドされることを確かめる
   - trusted publisher の登録（owner、repository、workflow、environment 名）と、タグの付け方を手順書にまとめる
   - 一時的なクローンで v1.0.0 のタグを付けてビルドする（このタグは push しない）
   - 完了条件: 生成された sdist と wheel の版が 1.0.0 になる
@@ -176,3 +176,4 @@
 - 3.7: lint ジョブは専用のフィルタ `lint`（コードのパスに `**/*.md` を加えたもの）で起動する。PR #1 の CI（run 39228883832、HEAD ea648b3）で、test 3.10〜3.14、build、lint のすべてが成功した。ruff と mypy は版を固定していないので、新しいリリースでコードを変えなくても lint が落ちることがありうる
 - 4.1: 目的関数は `score(y_true, y_pred)` の順で呼ぶようになった。r2 の golden は、`r2-argument-order` パッチを当てて legacy / modern の両方で作り直した。mask は変わらず、pls-r2 の n_iter は 8 から 7 になった。作り直した r2 の golden は mse の golden とビット単位で一致する（R² は MSE の単調関数なので、理論どおり）。既定の metric が r2 なので、テストの seed を実測し直した。`SMALL` / `FAST` は 12（2 反復で収束）、`SEED_3_ITERATIONS` は 8（3 反復で収束）。3.4 の note にある seed 8 / 14 は、修正前の値。今後 golden を `--force` で全構成作り直すときは、r2 の構成に必ず `--patch r2-argument-order` を付ける（生成スクリプトでは opt-in のまま）
 - 5.1: rc のタグは `v1.0.0-rc.1` の形でないと push のトリガーに一致しない（`v1.0.0rc1` は起動しない）。setuptools-scm は `1.0.0rc1` に正規化する。TestPyPI には安定版を含むすべてのタグを公開する。gh コマンドに渡すタグ名は、`${{ github.ref_name }}` を埋め込まず、引用符付きの `"$GITHUB_REF_NAME"` で参照する（スクリプトインジェクション対策。python-template にも同じ箇所があるが、本 spec の範囲外）。5.2 の手順書では、PyPI と TestPyPI の trusted publisher を登録するときに、environment 名（`pypi` / `testpypi`）を必ず指定するよう書く
+- 5.2: 一時クローンに `v1.0.0` を付けてビルドすると、1.0.0 の sdist と wheel になる（METADATA も 1.0.0）。`v1.0.0-rc.1` は 1.0.0rc1 になる。PyPI と TestPyPI には、どちらも 0.1.0 のプロジェクトがすでにあるので、trusted publisher はプロジェクトの Publishing から登録する。実リポジトリのタグは `v0.1.0` だけで、変えていない
