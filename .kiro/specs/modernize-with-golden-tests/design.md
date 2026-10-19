@@ -137,6 +137,7 @@ src/ensemble_outlier_sample_detection/
 └── _runtime.py                        # Optuna のログ抑制（退避して戻す）、進捗バーの生成
 tests/
 ├── conftest.py                        # 参照データ、golden case の読み込み、golden が書き換えられていないかの確認
+├── _golden_cases.py                   # golden の読み込み・照合・失敗メッセージの補助（conftest と test_golden が import する。2.3 で追加）
 ├── test_import.py                     # 公開 import、__version__、py.typed
 ├── test_golden.py                     # 2021 年環境と最新環境の golden との照合
 ├── test_estimator.py                  # sklearn 規約、入力検証、再現性、DataFrame と ndarray で結果が同じか
@@ -496,7 +497,7 @@ def make_progress_bar(enabled: bool, total: int) -> tqdm: ...
 
 ##### Batch / Job Contract
 - **Trigger**: メンテナーが、リポジトリのルートで手動で実行する
-  - `python tests/golden/generate_golden.py --env {legacy|modern} [--cases NAME ...] [--patch r2-argument-order] [--force --reason TEXT]`
+  - `python tests/golden/generate_golden.py --env {legacy|modern} [--cases NAME ...] [--patch r2-argument-order] [--force --reason TEXT] [--cases-dir DIR]`（`--cases-dir` は既定値が `tests/golden/cases`。依存の差を診断するときに scratch へ書き出すため、1.2 で追加）
 - **Input / validation**
   - `--env legacy` のとき、実行環境の版が `environment-legacy.yml` と一致するかを確かめる
   - `--env modern` のとき、Python ≥ 3.10 であることと、版が `requirements-modern.txt` と一致するかを確かめる
