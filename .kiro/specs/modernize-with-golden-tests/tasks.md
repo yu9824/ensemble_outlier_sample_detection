@@ -57,7 +57,7 @@
   - _Requirements: 3.2, 3.11, 9.1, 9.3, 9.4_
 
 - [ ] 3. Phase 2: scikit-learn 規約に沿ってリファクタリングする
-- [ ] 3.1 (P) 手法と評価指標の正規化、探索空間、モデルの生成、目的関数を独立した部品にする
+- [x] 3.1 (P) 手法と評価指標の正規化、探索空間、モデルの生成、目的関数を独立した部品にする
   - 手法の別名（大文字）を受け付け、未対応の手法や評価指標には、受け付ける値を示した ValueError を送出する
   - 探索空間、固定パラメータ、試行回数の規則、SVR のパラメータを suggest する順序を、今と同じに保つ
   - 目的関数は、検出器への後方参照ではなく、必要な値を引数で受け取る。評価関数の引数順は Phase 3 まで今のまま保ち、そのことをコメントで示す
@@ -165,3 +165,5 @@
 - 2.1: pandas は Phase 1 の間、一時的に `[project] dependencies` に残している（コメントで、3.3 で外すと書いてある）。3.3 で pandas の import をやめるときに、依存からも外す。`__init__.py` には template の書き方に合わせた `Path` / `_version_file` が名前空間に残っているので、3.6 で `try/except ImportError` に置き換えるか、`del` する。eosd-modern には、パッケージが `--no-deps -e .` で入っている
 - 2.2: 最新環境で 8 構成とも legacy / modern の golden と一致し、中央値は modern とビット単位で同じ。`max_iter=0` を与えると UnboundLocalError になる（変更前から正しく動かなかった）ので、3.3 で正の整数を検証して ValueError にする。SVR では DataConversionWarning が 1 回あたり約 1 万件出る。3.3 で 1 次元の y を渡すようにすれば消える
 - 2.3: golden の照合ロジックは補助モジュール `tests/_golden_cases.py` にまとめ、conftest と test_golden からトップレベルの名前で import している。tests/ に `__init__.py` を置かない、pytest 既定の prepend import mode が前提。テスト全体は 34 件、約 28 秒。`ruff check tests` を実行すると、既存の `tests/golden/generate_golden.py:730` に ISC004 が 1 件出る（3.6 で直す）。Optuna のログを抑える処理（3.2 / 3.3）が入るまでは、失敗時の出力に INFO が大量に出るので、`-p no:logging` を付けると読みやすい
+- 3.1: `_submodels` の目的関数は、今の `Objective` と試行ごとの params・値・best_params がビット単位で一致する（8 構成とも）。P6 の順序を固定しているテスト `test_make_objective_scores_oof_in_transitional_order` と `test_make_objective_r2_is_not_yet_y_true_first` は、4.1 で逆向きに直すか置き換える。`n_trials` に np.int64 を渡すと np.int64 が返るので、3.3 では必要に応じて `int()` で受ける
+- 2.4: CI（Linux x86_64）で、SVR の中央値が macOS の golden から相対差で最大 4.3e-4 ずれた。値は全セルで同じ。メンテナーの承認を得て、SVR の許容誤差だけを rtol=atol=1e-3 に緩めた（コミット 7e8e8e8）。PLS は rtol=1e-7 / atol=1e-10 のまま
