@@ -557,7 +557,7 @@ def make_progress_bar(enabled: bool, total: int) -> tqdm: ...
 
 #### CIWorkflow（`.github/workflows/CI.yml`）
 - python-template の CI.yml を元にする
-- `changes` ジョブ（dorny/paths-filter）が見るパスは `src/**`、`tests/**`、`example/example_chache.csv`、`pyproject.toml`、`ruff.toml`、`mypy.ini`、`.github/workflows/CI.yml`
+- `changes` ジョブ（dorny/paths-filter）が見るパスは `src/**`、`tests/**`、`example/example_chache.csv`、`pyproject.toml`、`ruff.toml`、`mypy.ini`、`.github/workflows/CI.yml`（フィルタ `code`。test と build が使う）。lint ジョブはフィルタ `lint` を使い、`src/**`、`tests/**`、`**/*.md`、`pyproject.toml`、`ruff.toml`、`mypy.ini`、`.github/workflows/CI.yml` を見る。ruff は Markdown 内の Python コード片も整形するので `**/*.md` を含める（3.7 で追加）
 - `test` ジョブ: Python `["3.10", "3.11", "3.12", "3.13", "3.14"]` のマトリクスで、`timeout-minutes: 10`、`pip install ".[test]"`、`pytest`（3.2, 9.1, 9.4）
 - `build` ジョブ（Phase 1 から）: Python 3.13 で `pip install ".[dev]"` の後、`python -m build` を実行し、wheel に `example/` と `tests/` が含まれていないことを確かめる（3.11）
 - `lint` ジョブ（Phase 2 の最後に追加）: Python 3.13 で `pip install ".[dev]"` の後、`ruff check .`、`ruff format --check .`、`mypy` を実行する（8.3, 8.4, 9.2）。Phase 1 の時点のコードは docstring と型ヒントがなく、D ルールと `disallow_untyped_defs` に必ず違反する。そのため、この時点で lint ジョブを入れると、Phase 2 が終わるまで CI が失敗し続ける

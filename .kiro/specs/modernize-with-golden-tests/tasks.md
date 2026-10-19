@@ -105,7 +105,7 @@
   - 完了条件: lint、format の検査、型チェックが、ソースとテストの両方で違反なく通り、golden テストも通ったまま
   - _Requirements: 7.1, 7.2, 7.3, 8.1, 8.2, 8.3, 8.4_
 
-- [ ] 3.7 CI に lint ジョブを加え、CI 全体が通ることを確かめる
+- [x] 3.7 CI に lint ジョブを加え、CI 全体が通ることを確かめる
   - lint、format の検査、型チェックのジョブを、変更検知と連動させて追加する
   - 完了条件: メンテナーの確認を得て push した後、test マトリクス、build、lint のすべてのジョブが成功する
   - _Requirements: 8.3, 8.4, 9.2, 9.3_
@@ -173,3 +173,4 @@
 - 3.4: `tests/test_estimator.py` は 46 件。seed 8（2 反復で収束）と seed 14（3 反復で収束）は実測した値で、前提が崩れれば assert で明示的に失敗する。ConvergenceWarning は検出器の文言 "EnsembleOutlierSampleDetector did not converge" で絞って数えるので、submodel 由来の警告では誤って失敗しない
 - 3.5: 3.2 の `optuna_stderr` は fixture の中で `StreamHandler(sys.stderr)` を作っていた。pytest 9 では、これだと閉じた setup 段階の capsys ストリームに書き込み、陽性対照は logging error の報告に引用された文字列に一致して偶然通っていた。emit の時点の `sys.stderr` に書く `_CurrentStderrHandler` に替え、陽性対照は行頭で一致を確かめるようにした。fit を通すテストは、検出器モジュールの属性 `_runtime.make_progress_bar` / `_fit_predict_submodel` を差し替えている。検出器がこれらを `from ... import` の形に変えると、明示的なメッセージで失敗する
 - 3.6: ruff 0.17 は Markdown 内の Python コード片も整形対象にするので、ruff.toml の `extend-exclude` に `.kiro` と `.claude` を加え（design の StaticAnalysisConfig も更新）、README のコード片を整形した。y=None の ValueError には sklearn の定型句 "requires y to be passed" を加え、`check_requires_y_none` が通るようにした。docstring の Examples は通常の pytest では実行されない（`--doctest-modules src` を付ければ 1 件通る）。参照論文は Crossref で確認した（Kaneko 2018, Chemometr. Intell. Lab. Syst. 177, 74-82, DOI 10.1016/j.chemolab.2018.04.015）
+- 3.7: lint ジョブは専用のフィルタ `lint`（コードのパスに `**/*.md` を加えたもの）で起動する。PR #1 の CI（run 39228883832、HEAD ea648b3）で、test 3.10〜3.14、build、lint のすべてが成功した。ruff と mypy は版を固定していないので、新しいリリースでコードを変えなくても lint が落ちることがありうる
