@@ -66,7 +66,7 @@
   - _Boundary: Submodels_
   - _Requirements: 4.5, 4.6, 7.1, 7.3_
 
-- [ ] 3.2 (P) Optuna のログ抑制と進捗バーを、副作用の残らない部品にする
+- [x] 3.2 (P) Optuna のログ抑制と進捗バーを、副作用の残らない部品にする
   - fit の間だけ Optuna の verbosity を下げ、正常終了でも例外でも元の値に戻す。default handler には触らない
   - 進捗バーは環境に応じて自動で切り替わる実装にし、表示しない場合も同じ経路で無効化する
   - この部品の単体テストは、このタスクで書く（fit を通した検証は 3.5 で行う）
@@ -168,3 +168,4 @@
 - 3.1: `_submodels` の目的関数は、今の `Objective` と試行ごとの params・値・best_params がビット単位で一致する（8 構成とも）。P6 の順序を固定しているテスト `test_make_objective_scores_oof_in_transitional_order` と `test_make_objective_r2_is_not_yet_y_true_first` は、4.1 で逆向きに直すか置き換える。`n_trials` に np.int64 を渡すと np.int64 が返るので、3.3 では必要に応じて `int()` で受ける
 - 2.4: CI（Linux x86_64）で、SVR の中央値が macOS の golden から相対差で最大 4.3e-4 ずれた。値は全セルで同じ。メンテナーの承認を得て、SVR の許容誤差だけを rtol=atol=1e-3 に緩めた（コミット 7e8e8e8）。PLS は rtol=1e-7 / atol=1e-10 のまま
 - 2.4: draft PR #1 の CI（run 39201250407、HEAD 7e8e8e8）は、test 3.10〜3.14 と build がすべて成功した。test ジョブの所要時間は 65〜135 秒。CI は pull_request で起動するので、以降も PR #1 に push して確かめる
+- 3.2: Optuna の default handler は import 時点の sys.stderr を握っているので、capsys / capfd では出力を捕まえられない。そこで `tests/test_runtime.py` の fixture `optuna_stderr` が、テストの間だけ StreamHandler を足して確認する。autouse の `restore_optuna_logging` は、テストごとに verbosity、handler、propagate を元に戻す。3.5 の fit を通したテストでも、この 2 つを使い回す。3.5 では、例外で抜けた経路でも handler の状態が変わらないことを確かめる（レビューの FYI）。無効化した tqdm でも `tqdm.write` は出力されるので、検出器では使わない
