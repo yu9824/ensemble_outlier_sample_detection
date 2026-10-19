@@ -89,7 +89,7 @@
   - 完了条件: 追加したテストが小さなパラメータで通り、テストスイート全体がローカルで 3 分以内に終わる
   - _Requirements: 2.6, 2.7, 4.1, 4.2, 4.3, 4.4, 4.6, 4.7, 4.8, 4.9, 4.10, 4.11, 4.12, 4.13_
 
-- [ ] 3.5 (P) fit を通した実行時の副作用と進捗表示をテストで確かめる
+- [x] 3.5 (P) fit を通した実行時の副作用と進捗表示をテストで確かめる
   - fit の間に Optuna の試行ログが出ないこと、fit の後（例外で中断した場合も）ログ設定が元に戻ることを検証する
   - 進捗バーについて、完了の表示、自動切り替えの実装になっていること、未収束でもエラーなく閉じること、無効化すると何も出ないことを検証する
   - モジュールを直接実行してもデバッガが起動せず、すぐに終わることを検証する
@@ -171,3 +171,4 @@
 - 3.2: Optuna の default handler は import 時点の sys.stderr を握っているので、capsys / capfd では出力を捕まえられない。そこで `tests/test_runtime.py` の fixture `optuna_stderr` が、テストの間だけ StreamHandler を足して確認する。autouse の `restore_optuna_logging` は、テストごとに verbosity、handler、propagate を元に戻す。3.5 の fit を通したテストでも、この 2 つを使い回す。3.5 では、例外で抜けた経路でも handler の状態が変わらないことを確かめる（レビューの FYI）。無効化した tqdm でも `tqdm.write` は出力されるので、検出器では使わない
 - 3.3: 書き直した検出器は、8 構成とも golden と一致する（modern の中央値はビット単位で同じ）。DataConversionWarning は 0 件になった。`tests/test_estimator.py` の 36 件が 3.4 の検証項目をほぼすべて先にカバーしているので、3.4 では差分を埋めるだけにする（`test_missing_y_raises` の match は "y is required" に強める）。`python -m ...ensemble_outlier_sample_detection` は、`__init__` が先にモジュールを import するので runpy の RuntimeWarning を stderr に出す。5.7 のテストでは、stderr が空であることを条件にしない。sklearn の `check_requires_y_none` は定型句 "requires y to be passed" がないので失敗する（spec では必須でない。3.6 で docstring と合わせて検討する）
 - 3.4: `tests/test_estimator.py` は 46 件。seed 8（2 反復で収束）と seed 14（3 反復で収束）は実測した値で、前提が崩れれば assert で明示的に失敗する。ConvergenceWarning は検出器の文言 "EnsembleOutlierSampleDetector did not converge" で絞って数えるので、submodel 由来の警告では誤って失敗しない
+- 3.5: 3.2 の `optuna_stderr` は fixture の中で `StreamHandler(sys.stderr)` を作っていた。pytest 9 では、これだと閉じた setup 段階の capsys ストリームに書き込み、陽性対照は logging error の報告に引用された文字列に一致して偶然通っていた。emit の時点の `sys.stderr` に書く `_CurrentStderrHandler` に替え、陽性対照は行頭で一致を確かめるようにした。fit を通すテストは、検出器モジュールの属性 `_runtime.make_progress_bar` / `_fit_predict_submodel` を差し替えている。検出器がこれらを `from ... import` の形に変えると、明示的なメッセージで失敗する
