@@ -1,0 +1,15 @@
+line-length = 79
+indent-width = 4
+# Spec documents (.kiro) and agent tooling (.claude) are not project code;
+# ruff would otherwise format the Python snippets in their Markdown files.
+extend-exclude = ["example", ".kiro", ".claude"]
+
+[lint]
+extend-select = ["D", "I"]
+unfixable = ["F401"]
+
+[lint.pydocstyle]
+convention = "numpy"
+
+[lint.per-file-ignores]
+"tests/**" = ["D"]

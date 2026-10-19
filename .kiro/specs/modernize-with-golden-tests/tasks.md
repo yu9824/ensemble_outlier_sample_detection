@@ -1,0 +1,182 @@
+# Implementation Plan
+
+> 実行上の前提
+> - 作業は main 以外のブランチで行う
+> - コミットと push はメンテナーの確認を得てから行う（CI の結果を見るタスクでも同じ）
+> - golden の生成とテストには、ネットワーク接続（conda-forge / PyPI）と手元の git を使う
+
+- [x] 1. Phase 0: 変更前の検出結果を golden として固定する
+- [x] 1.1 golden を生成する 2 つの環境を定義し、構築する
+  - 2021 年環境の定義を作る。Python 3.8、NumPy 1.20.1、SciPy 1.6.2、scikit-learn 0.24.1、pandas 1.2.4、Optuna 2.8.0、tqdm 4.59.0 と、その依存をビルド番号まで固定する
+  - 最新環境の定義を作る。Python 3.12 で、作業時点の最新安定版を固定する。開発ツール（pytest、build、ruff、mypy）は golden 用の固定とは分けて入れる
+  - 既存の他プロジェクトの環境は変えず、新しい名前の環境として作る
+  - 完了条件: 両方の環境で、主要な依存の版が定義ファイルの固定値と一致することを表示して確かめられる
+  - _Requirements: 1.1, 1.5, 1.10_
+
+- [x] 1.2 基準コミットのコードに名前付きパッチを当てて実行し、case ファイルを書き出す golden 生成スクリプトを作る
+  - Python 3.8 互換の構文で書く。基準コミットのソースを git から取り出し、インストール済みのパッケージとは別の名前で読み込む
+  - 名前付きパッチ 5 種（SVR の予測形状、最新環境向けの目的関数の形状、最新環境向けの RMSE、中央値の記録、R² の引数順）を、「完全一致する文字列を 1 回だけ置換する」形で用意する。一致が 1 回でなければ中断する
+  - 8 構成の表（PLS と SVR × 4 指標）と、時間予算に合わせた共通パラメータを持つ。各構成の mask、inlier mask、反復回数、中央値、入力データのハッシュ、パラメータ、環境の版、当てたパッチを、設計どおりのスキーマで書き出す
+  - 環境の版のチェック、収束しなかったときの中断（調整すべき構成を表示する）、2021 年環境での PLS のパッチ中立性の確認、既存のブロックと違うときに `--force` と理由がなければ上書きを拒否する処理を入れる
+  - 完了条件: 両方の環境でヘルプを表示できる。同じ条件で 2 回実行すると 2 回目は何も変わらない。理由を付けずに上書きしようとすると、終了コード 1 でメッセージが出る
+  - _Requirements: 1.2, 1.3, 1.4, 1.6, 1.8, 1.9, 1.10, 2.5, 6.3, 9.4_
+
+- [x] 1.3 2021 年環境と最新環境で golden を生成し、生成手順と更新ルールを文書化する
+  - 2021 年環境で legacy ブロックを、最新環境で modern ブロックを、8 構成すべてについて生成する
+  - 環境の作り方、生成コマンド、更新ルール（コードが原因なら golden は変えない、依存が原因なら承認を得て更新する）、更新履歴の表を文書にまとめ、初回生成の行を記録する
+  - 収束しないためにパラメータを調整した構成があれば、内容と理由を更新履歴に書く
+  - 完了条件: 8 つの case ファイルすべてに legacy と modern の両方のブロックがあり、PLS の中立性チェックが通っている。パッケージのソースには差分がない
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.9, 1.10, 2.4, 2.5_
+
+- [x] 2. Phase 1: パッケージングを移行し、最新環境で golden が通るようにする
+- [x] 2.1 src-layout に移し、ビルド設定・メタデータ・リポジトリ設定を一元化する
+  - 実装モジュールと初期化モジュールを、git の履歴を保ったまま src-layout に移す。初期化モジュールは明示的な再エクスポートにし、タグ由来のバージョンを読み込み（なければ unknown）、setup.py 専用だったメタデータを削除する。型情報のマーカーも追加する
+  - ビルド設定とメタデータ（依存の下限、追加依存の test / dev / example、ライセンス、URL、classifiers、タグからのバージョン決定、pytest の警告をエラーにする設定）を一元化し、setup.py と requirements.txt を削除する
+  - sdist から notebook と開発用ディレクトリを除き、参照 CSV は含める。ビルド成果物とキャッシュを git 管理外にする。lint / format と型チェックの設定ファイルを置く（強制は 3.7 から）
+  - 完了条件: 最新環境で editable install ができ、`__version__` が unknown 以外を返す。ビルドした wheel に example とテストが含まれない
+  - _Requirements: 3.1, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 8.1, 8.2_
+
+- [x] 2.2 最新の依存で動かすための最小限の修正と、golden 照合に必要な契約変更を入れる
+  - RMSE を新しい API で計算し、対数スケールの探索を新しい API に置き換える（パラメータの順序は変えない）。NumPy の bool の別名もやめる
+  - SVR の予測を、fit の中と目的関数の中の両方で列ベクトルに揃え、SVR が動くようにする
+  - 反復回数の属性を「実行した回数」に変え、最後の反復の中央値を private 属性に記録する
+  - 完了条件: 最新環境で 8 構成すべての fit がエラーなく終わり、自パッケージが原因の非推奨警告が出ない
+  - _Requirements: 3.2, 3.3, 4.8_
+
+- [x] 2.3 テストの土台と golden 回帰テストを作る
+  - 参照データ（出典のコメント行を残したまま）を読み込む fixture、case ファイルを読み込む処理、データのハッシュ照合、テストの前後で golden が書き換えられていないかの確認を用意する
+  - case ごとに 1 回だけ fit し、legacy ブロックとの完全一致と、modern ブロックとの一致（mask と反復回数は完全一致、中央値は許容誤差内）を検証する。失敗したときは、case 名と一致しないサンプルの index を表示する
+  - 公開 import、バージョン、型情報のマーカーの存在を確かめるテストを書く
+  - 照合の補助関数に人工的な不一致を与えるユニットテストを書き、case 名とサンプルの index が失敗メッセージに含まれることを確かめる（golden ファイル自体は変えない）
+  - 完了条件: 最新環境で、golden（8 構成 × 2 ブロック）、失敗メッセージ、import のテストがすべて通る
+  - _Requirements: 1.7, 2.1, 2.2, 2.3, 2.8, 3.6, 3.8, 3.10_
+
+- [x] 2.4 CI のテストと build ジョブを作り、全マトリクスで golden が通ることを確かめる
+  - 変更検知、Python 3.10〜3.14 のテストマトリクス（ジョブあたり 10 分で打ち切り）、wheel の中身を確かめる build ジョブを作る。権限は最小にする
+  - 完了条件: メンテナーの確認を得て push した後、全マトリクスのテストと build ジョブが成功し、各テストジョブが 10 分以内に終わる。一致しないセルがあれば golden を更新せずに止め、設計の Open Questions の選択肢をメンテナーに示す
+  - _Requirements: 3.2, 3.11, 9.1, 9.3, 9.4_
+
+- [x] 3. Phase 2: scikit-learn 規約に沿ってリファクタリングする
+- [x] 3.1 (P) 手法と評価指標の正規化、探索空間、モデルの生成、目的関数を独立した部品にする
+  - 手法の別名（大文字）を受け付け、未対応の手法や評価指標には、受け付ける値を示した ValueError を送出する
+  - 探索空間、固定パラメータ、試行回数の規則、SVR のパラメータを suggest する順序を、今と同じに保つ
+  - 目的関数は、検出器への後方参照ではなく、必要な値を引数で受け取る。評価関数の引数順は Phase 3 まで今のまま保ち、そのことをコメントで示す
+  - この部品の単体テスト（別名、ValueError、suggest の順序、試行回数、評価指標の表）は、このタスクで書く
+  - 完了条件: 部品の単体テストが通る
+  - _Boundary: Submodels_
+  - _Requirements: 4.5, 4.6, 7.1, 7.3_
+
+- [x] 3.2 (P) Optuna のログ抑制と進捗バーを、副作用の残らない部品にする
+  - fit の間だけ Optuna の verbosity を下げ、正常終了でも例外でも元の値に戻す。default handler には触らない
+  - 進捗バーは環境に応じて自動で切り替わる実装にし、表示しない場合も同じ経路で無効化する
+  - この部品の単体テストは、このタスクで書く（fit を通した検証は 3.5 で行う）
+  - 完了条件: 部品の単体テストで、verbosity が正常時にも例外時にも元に戻ること、無効化したときに何も出力しないことを確かめられる
+  - _Boundary: Runtime_
+  - _Requirements: 5.1, 5.2, 5.4, 5.6, 7.1, 7.3_
+
+- [x] 3.3 検出器を scikit-learn 規約に沿って書き直し、3.1 と 3.2 の部品を組み込む
+  - コンストラクタ引数を書き換えず、正規化した値と途中の状態は fit の局所変数で持つ。`max_components` の累積最小値と、RNG から seed を引く順序は今のまま保つ
+  - 入力検証（y がない、長さの不一致、欠損値・無限大、正の整数でない引数）、特徴量の数と列名の記録、`fit` が self を返すこと、再学習で結果を上書きすることを実装する
+  - 予測行列の集約を NumPy で行い、未収束のときは最後の結果を属性に設定して ConvergenceWarning を出す。進捗バーは例外時も閉じる
+  - 古い反復回数の属性、目的関数クラス、デバッグ用の直接実行ブロックを削除する
+  - 完了条件: golden テスト（legacy と modern）がすべて通ったまま、fit が self を返し、fit の前後で `get_params()` が同じになる
+  - _Depends: 3.1, 3.2_
+  - _Requirements: 2.6, 2.7, 4.1, 4.2, 4.3, 4.4, 4.7, 4.8, 4.9, 4.10, 4.11, 4.12, 4.13, 5.3, 5.5, 5.7_
+
+- [x] 3.4 estimator の規約と入力検証をテストで確かめる
+  - 戻り値、引数が変わらないこと、再学習、clone、未対応の値と不正な入力の ValueError、未収束時の警告と属性、反復回数の意味、古い属性がないこと、特徴量の記録、公開属性が規定のものだけであること、未学習時の例外を検証する
+  - 同じ seed での再現性と、表形式と配列で結果が同じことを検証する
+  - 完了条件: 追加したテストが小さなパラメータで通り、テストスイート全体がローカルで 3 分以内に終わる
+  - _Requirements: 2.6, 2.7, 4.1, 4.2, 4.3, 4.4, 4.6, 4.7, 4.8, 4.9, 4.10, 4.11, 4.12, 4.13_
+
+- [x] 3.5 (P) fit を通した実行時の副作用と進捗表示をテストで確かめる
+  - fit の間に Optuna の試行ログが出ないこと、fit の後（例外で中断した場合も）ログ設定が元に戻ることを検証する
+  - 進捗バーについて、完了の表示、自動切り替えの実装になっていること、未収束でもエラーなく閉じること、無効化すると何も出ないことを検証する
+  - モジュールを直接実行してもデバッガが起動せず、すぐに終わることを検証する
+  - 3.4 とは別のテストファイルで行うので、3.4 と並行して進められる
+  - 完了条件: fit を通した runtime のテストが、ローカルの最新環境で通る
+  - _Boundary: ApiTests_
+  - _Depends: 3.3_
+  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
+
+- [x] 3.6 すべての公開 API に docstring と型ヒントを整え、lint・format・型チェックを通す
+  - 公開クラスと公開メソッドに、NumPy スタイルの docstring（引数の取りうる値と既定値、戻り値、学習後の属性、例外）を書き、検出器にはアルゴリズムの概要と参照論文を書く
+  - 公開 API と内部の関数・メソッドのすべてに型ヒントを付け、コード全体を整形する
+  - 完了条件: lint、format の検査、型チェックが、ソースとテストの両方で違反なく通り、golden テストも通ったまま
+  - _Requirements: 7.1, 7.2, 7.3, 8.1, 8.2, 8.3, 8.4_
+
+- [x] 3.7 CI に lint ジョブを加え、CI 全体が通ることを確かめる
+  - lint、format の検査、型チェックのジョブを、変更検知と連動させて追加する
+  - 完了条件: メンテナーの確認を得て push した後、test マトリクス、build、lint のすべてのジョブが成功する
+  - _Requirements: 8.3, 8.4, 9.2, 9.3_
+
+- [x] 4. Phase 3: R² の引数順を直す
+- [x] 4.1 R² を定義どおりの順序で計算するように直し、r2 構成の golden だけを再生成する
+  - 目的関数が、評価関数を「実測値、予測値」の順で呼ぶように変える
+  - golden 生成スクリプトで R² の修正パッチを指定し、2021 年環境と最新環境の両方で r2 の 2 構成だけを、理由を付けて再生成する。更新履歴に行を加える
+  - 目的関数の値が、独立に計算した R² と一致することを確かめるテストを加える
+  - Submodels、golden の資産、テストにまたがる統合タスクとして、1 つの変更にまとめる
+  - 完了条件: golden の差分が r2 の 2 ファイルだけで、テストスイート全体が通る
+  - _Requirements: 6.1, 6.2, 6.3, 6.4_
+
+- [x] 5. Phase 4: リリースの自動化と利用者向けの成果物を整える
+- [x] 5.1 (P) リリースワークフロー、リリースノートの設定、依存更新ボットを作る
+  - バージョンタグの push で、sdist と wheel のビルド（タグを取得できるように履歴をすべて checkout する）、署名付きの GitHub Release、安定版と rc の PyPI への公開、すべてのタグの TestPyPI への公開を、trusted publishing で行う
+  - リリースノートのカテゴリと、Python 依存と GitHub Actions の週 1 回の更新提案を設定する
+  - 完了条件: ワークフローと設定ファイルが構文として正しく読み込め、トリガー、ジョブの条件、権限が設計どおりになっている
+  - _Boundary: ReleaseWorkflow, DependabotConfig_
+  - _Requirements: 9.5, 9.6, 9.7, 9.8_
+
+- [x] 5.2 (P) リリース手順書を書き、タグから 1.0.0 としてビルドされることを確かめる
+  - trusted publisher の登録（owner、repository、workflow、environment 名）と、タグの付け方を手順書にまとめる
+  - 一時的なクローンで v1.0.0 のタグを付けてビルドする（このタグは push しない）
+  - 完了条件: 生成された sdist と wheel の版が 1.0.0 になる
+  - _Boundary: HowToRelease_
+  - _Requirements: 3.14_
+
+- [x] 5.3 (P) README と CHANGELOG を、新しい API と 1.0.0 の変更点に合わせて書く
+  - README に、インストール方法、対応 Python、新しい API での使い方、CHANGELOG へのリンクを書く。参考文献とライセンスは残す
+  - CHANGELOG の 1.0.0 に、破壊的変更、変更点、修正点を、移行例とあわせて書く
+  - 完了条件: README の使用例をそのまま実行すると、最新環境で動く。CHANGELOG に要件 7.5 の項目がすべて書かれている
+  - _Boundary: UserDocs_
+  - _Requirements: 7.4, 7.5_
+
+- [x] 5.4 (P) example notebook を新しい API に直し、新しい環境で実行し直す
+  - notebook 自身が使っている削除済みの API を置き換え、検出器を新しい API の書き方で呼ぶ
+  - example 用の追加依存を入れた最新環境で、notebook を先頭から実行し、出力を更新する
+  - 完了条件: notebook がエラーなく最後まで実行され、保存された出力が新しい API の実行結果になっている
+  - _Boundary: ExampleNotebook_
+  - _Requirements: 7.6_
+
+- [x] 6. 全体の統合検証
+- [x] 6.1 最終ブランチで、テスト、lint、build、CI がすべて通ることと、要件が網羅されていることを確かめる
+  - 依存を新しく入れ直した最新環境で、テストスイート、lint、format の検査、型チェック、ビルドを実行し、自パッケージが原因の警告が出ないことを確かめる
+  - CI の全ジョブの結果と、各テストジョブの所要時間を確かめる
+  - 完了条件: ローカルと CI の両方ですべての検査が成功し、テストジョブがどれも 10 分以内に終わる
+  - _Requirements: 3.2, 3.3, 9.1, 9.3, 9.4_
+
+## Implementation Notes
+- 1.1: golden 用の環境は `~/opt/miniforge3/envs/eosd-golden-legacy`（Python 3.8.20 / numpy 1.20.1 / scikit-learn 0.24.1 / pandas 1.2.4 / optuna 2.8.0）と `~/opt/miniforge3/envs/eosd-modern`（Python 3.12.15 / numpy 2.5.4 / scikit-learn 1.9.1 / pandas 3.0.6 / optuna 5.0.0）。eosd-modern には pytest / build / ruff / mypy も固定なしで入っているので、以降の開発とテストもこの環境で行う。`conductivity-prediction-old` は参照するだけで、変更しない
+- 1.1: legacy 環境では `import optuna` の際に SQLAlchemy の MovedIn20Warning が出る（推移的依存は参照環境の版に合わせたため）。golden はインメモリで生成するので、計算には影響しない。1.3 の README に書いておく。requirements-modern.txt 冒頭の作成コマンドは `python=3.12.15 --override-channels` を明記する形に直すとよい（1.3 で対応する）
+- 1.1: 最新環境の pandas は 3.0（Copy-on-Write）。変更前のコードを pandas 3 で動かした結果は、1.3 で初めて確かめることになる
+- 1.2: 生成スクリプトには `--cases-dir`（既定値は `tests/golden/cases`）を追加した。診断用の生成は scratch に書き出せる（1.3 の README に書く）。「書き込まない」と判定するのは、result、provenance.patches、baseline_commit がすべて一致するときだけ。params や data が変わった場合は、`--force --reason` を付けなければ書き込まない。書き込みは全構成をまとめて行い、途中で止まった場合は何も書かない。1 回の実行は約 90 秒
+- 1.2: 実測の結果、PLS（n_estimators=30）は 15 件が外れ値で、n_iter は r2 が 8、その他が 7。SVR は 0 件で n_iter は 1。legacy と modern で mask は一致する。中央値の差は、PLS が約 1.8e-15、SVR が最大で約 1.09（Optuna の差によるもの。README に書く）
+- 1.3: 8 構成とも、共通パラメータのまま収束した（PARAM_OVERRIDES は空）。golden は macOS arm64 で生成したので、CI（Linux x86_64）で一致するかは 2.4 で初めて確かめる。依存の更新が原因かを診断する前に、`requirements-modern.txt` と `MODERN_VERSIONS` の両方を新しい版に合わせる必要がある
+- 2.1: pandas は Phase 1 の間、一時的に `[project] dependencies` に残している（コメントで、3.3 で外すと書いてある）。3.3 で pandas の import をやめるときに、依存からも外す。`__init__.py` には template の書き方に合わせた `Path` / `_version_file` が名前空間に残っているので、3.6 で `try/except ImportError` に置き換えるか、`del` する。eosd-modern には、パッケージが `--no-deps -e .` で入っている
+- 2.2: 最新環境で 8 構成とも legacy / modern の golden と一致し、中央値は modern とビット単位で同じ。`max_iter=0` を与えると UnboundLocalError になる（変更前から正しく動かなかった）ので、3.3 で正の整数を検証して ValueError にする。SVR では DataConversionWarning が 1 回あたり約 1 万件出る。3.3 で 1 次元の y を渡すようにすれば消える
+- 2.3: golden の照合ロジックは補助モジュール `tests/_golden_cases.py` にまとめ、conftest と test_golden からトップレベルの名前で import している。tests/ に `__init__.py` を置かない、pytest 既定の prepend import mode が前提。テスト全体は 34 件、約 28 秒。`ruff check tests` を実行すると、既存の `tests/golden/generate_golden.py:730` に ISC004 が 1 件出る（3.6 で直す）。Optuna のログを抑える処理（3.2 / 3.3）が入るまでは、失敗時の出力に INFO が大量に出るので、`-p no:logging` を付けると読みやすい
+- 3.1: `_submodels` の目的関数は、今の `Objective` と試行ごとの params・値・best_params がビット単位で一致する（8 構成とも）。P6 の順序を固定しているテスト `test_make_objective_scores_oof_in_transitional_order` と `test_make_objective_r2_is_not_yet_y_true_first` は、4.1 で逆向きに直すか置き換える。`n_trials` に np.int64 を渡すと np.int64 が返るので、3.3 では必要に応じて `int()` で受ける
+- 2.4: CI（Linux x86_64）で、SVR の中央値が macOS の golden から相対差で最大 4.3e-4 ずれた。値は全セルで同じ。メンテナーの承認を得て、SVR の許容誤差だけを rtol=atol=1e-3 に緩めた（コミット 7e8e8e8）。PLS は rtol=1e-7 / atol=1e-10 のまま
+- 2.4: draft PR #1 の CI（run 39201250407、HEAD 7e8e8e8）は、test 3.10〜3.14 と build がすべて成功した。test ジョブの所要時間は 65〜135 秒。CI は pull_request で起動するので、以降も PR #1 に push して確かめる
+- 3.2: Optuna の default handler は import 時点の sys.stderr を握っているので、capsys / capfd では出力を捕まえられない。そこで `tests/test_runtime.py` の fixture `optuna_stderr` が、テストの間だけ StreamHandler を足して確認する。autouse の `restore_optuna_logging` は、テストごとに verbosity、handler、propagate を元に戻す。3.5 の fit を通したテストでも、この 2 つを使い回す。3.5 では、例外で抜けた経路でも handler の状態が変わらないことを確かめる（レビューの FYI）。無効化した tqdm でも `tqdm.write` は出力されるので、検出器では使わない
+- 3.3: 書き直した検出器は、8 構成とも golden と一致する（modern の中央値はビット単位で同じ）。DataConversionWarning は 0 件になった。`tests/test_estimator.py` の 36 件が 3.4 の検証項目をほぼすべて先にカバーしているので、3.4 では差分を埋めるだけにする（`test_missing_y_raises` の match は "y is required" に強める）。`python -m ...ensemble_outlier_sample_detection` は、`__init__` が先にモジュールを import するので runpy の RuntimeWarning を stderr に出す。5.7 のテストでは、stderr が空であることを条件にしない。sklearn の `check_requires_y_none` は定型句 "requires y to be passed" がないので失敗する（spec では必須でない。3.6 で docstring と合わせて検討する）
+- 3.4: `tests/test_estimator.py` は 46 件。seed 8（2 反復で収束）と seed 14（3 反復で収束）は実測した値で、前提が崩れれば assert で明示的に失敗する。ConvergenceWarning は検出器の文言 "EnsembleOutlierSampleDetector did not converge" で絞って数えるので、submodel 由来の警告では誤って失敗しない
+- 3.5: 3.2 の `optuna_stderr` は fixture の中で `StreamHandler(sys.stderr)` を作っていた。pytest 9 では、これだと閉じた setup 段階の capsys ストリームに書き込み、陽性対照は logging error の報告に引用された文字列に一致して偶然通っていた。emit の時点の `sys.stderr` に書く `_CurrentStderrHandler` に替え、陽性対照は行頭で一致を確かめるようにした。fit を通すテストは、検出器モジュールの属性 `_runtime.make_progress_bar` / `_fit_predict_submodel` を差し替えている。検出器がこれらを `from ... import` の形に変えると、明示的なメッセージで失敗する
+- 3.6: ruff 0.17 は Markdown 内の Python コード片も整形対象にするので、ruff.toml の `extend-exclude` に `.kiro` と `.claude` を加え（design の StaticAnalysisConfig も更新）、README のコード片を整形した。y=None の ValueError には sklearn の定型句 "requires y to be passed" を加え、`check_requires_y_none` が通るようにした。docstring の Examples は通常の pytest では実行されない（`--doctest-modules src` を付ければ 1 件通る）。参照論文は Crossref で確認した（Kaneko 2018, Chemometr. Intell. Lab. Syst. 177, 74-82, DOI 10.1016/j.chemolab.2018.04.015）
+- 3.7: lint ジョブは専用のフィルタ `lint`（コードのパスに `**/*.md` を加えたもの）で起動する。PR #1 の CI（run 39228883832、HEAD ea648b3）で、test 3.10〜3.14、build、lint のすべてが成功した。ruff と mypy は版を固定していないので、新しいリリースでコードを変えなくても lint が落ちることがありうる
+- 4.1: 目的関数は `score(y_true, y_pred)` の順で呼ぶようになった。r2 の golden は、`r2-argument-order` パッチを当てて legacy / modern の両方で作り直した。mask は変わらず、pls-r2 の n_iter は 8 から 7 になった。作り直した r2 の golden は mse の golden とビット単位で一致する（R² は MSE の単調関数なので、理論どおり）。既定の metric が r2 なので、テストの seed を実測し直した。`SMALL` / `FAST` は 12（2 反復で収束）、`SEED_3_ITERATIONS` は 8（3 反復で収束）。3.4 の note にある seed 8 / 14 は、修正前の値。今後 golden を `--force` で全構成作り直すときは、r2 の構成に必ず `--patch r2-argument-order` を付ける（生成スクリプトでは opt-in のまま）
+- 5.1: rc のタグは `v1.0.0-rc.1` の形でないと push のトリガーに一致しない（`v1.0.0rc1` は起動しない）。setuptools-scm は `1.0.0rc1` に正規化する。TestPyPI には安定版を含むすべてのタグを公開する。gh コマンドに渡すタグ名は、`${{ github.ref_name }}` を埋め込まず、引用符付きの `"$GITHUB_REF_NAME"` で参照する（スクリプトインジェクション対策。python-template にも同じ箇所があるが、本 spec の範囲外）。5.2 の手順書では、PyPI と TestPyPI の trusted publisher を登録するときに、environment 名（`pypi` / `testpypi`）を必ず指定するよう書く
+- 5.2: 一時クローンに `v1.0.0` を付けてビルドすると、1.0.0 の sdist と wheel になる（METADATA も 1.0.0）。`v1.0.0-rc.1` は 1.0.0rc1 になる。PyPI と TestPyPI には、どちらも 0.1.0 のプロジェクトがすでにあるので、trusted publisher はプロジェクトの Publishing から登録する。実リポジトリのタグは `v0.1.0` だけで、変えていない
+- 5.3: CHANGELOG に書いた 0.1.0 の非互換は、実際に確かめた範囲に絞った（PLS の r2 / mse / mae は最新環境でも動いていた）。実際に壊れていたのは、NumPy 1.24〜1.26 の `np.bool`、scikit-learn 1.6 以降の rmse、すべての環境での SVR の 3 つ。CHANGELOG の見出しは `## [1.0.0] - Unreleased` なので、タグを付ける前に日付に書き換える（HOW_TO_RELEASE の手順 2 に追記した）
+- 5.4: notebook は、作業用の venv（`.[example]` を入れたもの）で `jupyter nbconvert --execute --inplace` を実行し、69 秒でエラーなく最後まで動いた（15 件の外れ値、3 反復）。pandas 3 では、文字列 index の Series を位置で引くとエラーになるので `.iloc` に直した。`sns.reset_defaults()` は matplotlib_inline の図の出力を止めてしまうので削除した。notebook 自身の評価関数も `(y_true, y_pred)` の順に直した。サイズは 5.5MB から 2.0MB になった（図が PNG だけになった）
+- 6.1: クリーンなクローン（HEAD 730814f）に新しい venv を作り、`pip install ".[test,dev]"` から検証した（numpy 2.5.4 / scikit-learn 1.9.1 / optuna 5.0.0 / pandas 3.0.6）。自パッケージが原因の Deprecation / FutureWarning をエラーにしたうえで、pytest は 192 passed。ruff check / format、mypy、build もすべて成功し、wheel に example/ と tests/ は入っていない。PR #1 の CI（run 39266971485）は全ジョブ成功で、test ジョブは 78〜148 秒

@@ -1,0 +1,67 @@
+# https://packaging.python.org/ja/latest/guides/writing-pyproject-toml/
+[build-system]
+requires = ["setuptools>=77.0.3", "setuptools-scm[toml]>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ensemble-outlier-sample-detection"
+dynamic = ["version"]
+description = "Ensemble-based outlier sample detection for regression data."
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.10"
+# https://spdx.org/licenses/
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "yu9824", email = "yu.9824.job@gmail.com" }]
+maintainers = [{ name = "yu9824", email = "yu.9824.job@gmail.com" }]
+keywords = [
+    "outlier detection",
+    "ensemble",
+    "PLS",
+    "SVR",
+    "scikit-learn",
+]
+# https://pypi.org/classifiers/
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "numpy>=1.23",
+    "scikit-learn>=1.6",
+    "optuna>=3.0",
+    "tqdm>=4.40",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "pandas"]
+dev = ["build", "ruff", "mypy"]
+example = ["pandas", "matplotlib", "seaborn", "jupyter"]
+
+[project.urls]
+Homepage = "https://github.com/yu9824/ensemble_outlier_sample_detection"
+Source = "https://github.com/yu9824/ensemble_outlier_sample_detection"
+Tracker = "https://github.com/yu9824/ensemble_outlier_sample_detection/issues"
+"Release Notes" = "https://github.com/yu9824/ensemble_outlier_sample_detection/releases"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+# setuptools>=69 includes py.typed automatically.
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+version_file = "src/ensemble_outlier_sample_detection/_version.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "error::DeprecationWarning:ensemble_outlier_sample_detection.*",
+    "error::FutureWarning:ensemble_outlier_sample_detection.*",
+]
