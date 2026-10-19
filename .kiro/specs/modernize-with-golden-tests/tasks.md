@@ -29,7 +29,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.9, 1.10, 2.4, 2.5_
 
 - [ ] 2. Phase 1: パッケージングを移行し、最新環境で golden が通るようにする
-- [ ] 2.1 src-layout に移し、ビルド設定・メタデータ・リポジトリ設定を一元化する
+- [x] 2.1 src-layout に移し、ビルド設定・メタデータ・リポジトリ設定を一元化する
   - 実装モジュールと初期化モジュールを、git の履歴を保ったまま src-layout に移す。初期化モジュールは明示的な再エクスポートにし、タグ由来のバージョンを読み込み（なければ unknown）、setup.py 専用だったメタデータを削除する。型情報のマーカーも追加する
   - ビルド設定とメタデータ（依存の下限、追加依存の test / dev / example、ライセンス、URL、classifiers、タグからのバージョン決定、pytest の警告をエラーにする設定）を一元化し、setup.py と requirements.txt を削除する
   - sdist から notebook と開発用ディレクトリを除き、参照 CSV は含める。ビルド成果物とキャッシュを git 管理外にする。lint / format と型チェックの設定ファイルを置く（強制は 3.7 から）
@@ -162,3 +162,4 @@
 - 1.2: 生成スクリプトには `--cases-dir`（既定値は `tests/golden/cases`）を追加した。診断用の生成は scratch に書き出せる（1.3 の README に書く）。「書き込まない」と判定するのは、result、provenance.patches、baseline_commit がすべて一致するときだけ。params や data が変わった場合は、`--force --reason` を付けなければ書き込まない。書き込みは全構成をまとめて行い、途中で止まった場合は何も書かない。1 回の実行は約 90 秒
 - 1.2: 実測の結果、PLS（n_estimators=30）は 15 件が外れ値で、n_iter は r2 が 8、その他が 7。SVR は 0 件で n_iter は 1。legacy と modern で mask は一致する。中央値の差は、PLS が約 1.8e-15、SVR が最大で約 1.09（Optuna の差によるもの。README に書く）
 - 1.3: 8 構成とも、共通パラメータのまま収束した（PARAM_OVERRIDES は空）。golden は macOS arm64 で生成したので、CI（Linux x86_64）で一致するかは 2.4 で初めて確かめる。依存の更新が原因かを診断する前に、`requirements-modern.txt` と `MODERN_VERSIONS` の両方を新しい版に合わせる必要がある
+- 2.1: pandas は Phase 1 の間、一時的に `[project] dependencies` に残している（コメントで、3.3 で外すと書いてある）。3.3 で pandas の import をやめるときに、依存からも外す。`__init__.py` には template の書き方に合わせた `Path` / `_version_file` が名前空間に残っているので、3.6 で `try/except ImportError` に置き換えるか、`del` する。eosd-modern には、パッケージが `--no-deps -e .` で入っている

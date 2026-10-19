@@ -1,0 +1,13 @@
+line-length = 79
+indent-width = 4
+extend-exclude = ["example"]
+
+[lint]
+extend-select = ["D", "I"]
+unfixable = ["F401"]
+
+[lint.pydocstyle]
+convention = "numpy"
+
+[lint.per-file-ignores]
+"tests/**" = ["D"]

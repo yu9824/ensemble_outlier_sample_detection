@@ -1,4 +1,5 @@
-include LICENSE
-include *.md
-exclude README.md
-include requirements.txt
+prune example
+include example/example_chache.csv
+prune .kiro
+prune .claude
+prune .github

@@ -1,16 +1,18 @@
-# 正規表現でtextファイルと同じやり方で読み込むのですべて手打ちする．
+"""Ensemble-based outlier sample detection for regression data."""
 
-from .ensemble_outlier_sample_detection import *
+from pathlib import Path
 
-__version__      = '0.1.0'
-__license__      = 'Apache License 2.0'
-__author__       = 'yu9824'
-__copyright__    = 'Copyright © 2021 yu9824'
-__author_email__ = 'yu.9824.job@gmail.com'
-__user_id__ = 'yu9824'
-__app_name__ = 'ensemble_outlier_sample_detection'
-__url__ = 'https://github.com/yu-9824/ensemble_outlier_sample_detection/'
+from .ensemble_outlier_sample_detection import EnsembleOutlierSampleDetector
 
-__all__ = [
-    'EnsembleOutlierSampleDetector'
-]
+_version_file = Path(__file__).parent / "_version.py"
+
+if _version_file.is_file():
+    from ._version import __version__
+else:
+    __version__ = "unknown"
+
+__license__ = "Apache-2.0"
+__author__ = "yu9824"
+__copyright__ = "Copyright © 2021 yu9824"
+
+__all__ = ["EnsembleOutlierSampleDetector"]
