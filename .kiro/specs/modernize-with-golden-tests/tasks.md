@@ -13,7 +13,7 @@
   - 完了条件: 両方の環境で、主要な依存の版が定義ファイルの固定値と一致することを表示して確かめられる
   - _Requirements: 1.1, 1.5, 1.10_
 
-- [ ] 1.2 基準コミットのコードに名前付きパッチを当てて実行し、case ファイルを書き出す golden 生成スクリプトを作る
+- [x] 1.2 基準コミットのコードに名前付きパッチを当てて実行し、case ファイルを書き出す golden 生成スクリプトを作る
   - Python 3.8 互換の構文で書く。基準コミットのソースを git から取り出し、インストール済みのパッケージとは別の名前で読み込む
   - 名前付きパッチ 5 種（SVR の予測形状、最新環境向けの目的関数の形状、最新環境向けの RMSE、中央値の記録、R² の引数順）を、「完全一致する文字列を 1 回だけ置換する」形で用意する。一致が 1 回でなければ中断する
   - 8 構成の表（PLS と SVR × 4 指標）と、時間予算に合わせた共通パラメータを持つ。各構成の mask、inlier mask、反復回数、中央値、入力データのハッシュ、パラメータ、環境の版、当てたパッチを、設計どおりのスキーマで書き出す
@@ -159,3 +159,5 @@
 - 1.1: golden 用の環境は `~/opt/miniforge3/envs/eosd-golden-legacy`（Python 3.8.20 / numpy 1.20.1 / scikit-learn 0.24.1 / pandas 1.2.4 / optuna 2.8.0）と `~/opt/miniforge3/envs/eosd-modern`（Python 3.12.15 / numpy 2.5.4 / scikit-learn 1.9.1 / pandas 3.0.6 / optuna 5.0.0）。eosd-modern には pytest / build / ruff / mypy も固定なしで入っているので、以降の開発とテストもこの環境で行う。`conductivity-prediction-old` は参照するだけで、変更しない
 - 1.1: legacy 環境では `import optuna` の際に SQLAlchemy の MovedIn20Warning が出る（推移的依存は参照環境の版に合わせたため）。golden はインメモリで生成するので、計算には影響しない。1.3 の README に書いておく。requirements-modern.txt 冒頭の作成コマンドは `python=3.12.15 --override-channels` を明記する形に直すとよい（1.3 で対応する）
 - 1.1: 最新環境の pandas は 3.0（Copy-on-Write）。変更前のコードを pandas 3 で動かした結果は、1.3 で初めて確かめることになる
+- 1.2: 生成スクリプトには `--cases-dir`（既定値は `tests/golden/cases`）を追加した。診断用の生成は scratch に書き出せる（1.3 の README に書く）。「書き込まない」と判定するのは、result、provenance.patches、baseline_commit がすべて一致するときだけ。params や data が変わった場合は、`--force --reason` を付けなければ書き込まない。書き込みは全構成をまとめて行い、途中で止まった場合は何も書かない。1 回の実行は約 90 秒
+- 1.2: 実測の結果、PLS（n_estimators=30）は 15 件が外れ値で、n_iter は r2 が 8、その他が 7。SVR は 0 件で n_iter は 1。legacy と modern で mask は一致する。中央値の差は、PLS が約 1.8e-15、SVR が最大で約 1.09（Optuna の差によるもの。README に書く）
