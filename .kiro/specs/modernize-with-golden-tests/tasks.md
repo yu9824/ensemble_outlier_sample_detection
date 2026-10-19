@@ -6,7 +6,7 @@
 > - golden の生成とテストには、ネットワーク接続（conda-forge / PyPI）と手元の git を使う
 
 - [ ] 1. Phase 0: 変更前の検出結果を golden として固定する
-- [ ] 1.1 golden を生成する 2 つの環境を定義し、構築する
+- [x] 1.1 golden を生成する 2 つの環境を定義し、構築する
   - 2021 年環境の定義を作る。Python 3.8、NumPy 1.20.1、SciPy 1.6.2、scikit-learn 0.24.1、pandas 1.2.4、Optuna 2.8.0、tqdm 4.59.0 と、その依存をビルド番号まで固定する
   - 最新環境の定義を作る。Python 3.12 で、作業時点の最新安定版を固定する。開発ツール（pytest、build、ruff、mypy）は golden 用の固定とは分けて入れる
   - 既存の他プロジェクトの環境は変えず、新しい名前の環境として作る
@@ -154,3 +154,8 @@
   - CI の全ジョブの結果と、各テストジョブの所要時間を確かめる
   - 完了条件: ローカルと CI の両方ですべての検査が成功し、テストジョブがどれも 10 分以内に終わる
   - _Requirements: 3.2, 3.3, 9.1, 9.3, 9.4_
+
+## Implementation Notes
+- 1.1: golden 用の環境は `~/opt/miniforge3/envs/eosd-golden-legacy`（Python 3.8.20 / numpy 1.20.1 / scikit-learn 0.24.1 / pandas 1.2.4 / optuna 2.8.0）と `~/opt/miniforge3/envs/eosd-modern`（Python 3.12.15 / numpy 2.5.4 / scikit-learn 1.9.1 / pandas 3.0.6 / optuna 5.0.0）。eosd-modern には pytest / build / ruff / mypy も固定なしで入っているので、以降の開発とテストもこの環境で行う。`conductivity-prediction-old` は参照するだけで、変更しない
+- 1.1: legacy 環境では `import optuna` の際に SQLAlchemy の MovedIn20Warning が出る（推移的依存は参照環境の版に合わせたため）。golden はインメモリで生成するので、計算には影響しない。1.3 の README に書いておく。requirements-modern.txt 冒頭の作成コマンドは `python=3.12.15 --override-channels` を明記する形に直すとよい（1.3 で対応する）
+- 1.1: 最新環境の pandas は 3.0（Copy-on-Write）。変更前のコードを pandas 3 で動かした結果は、1.3 で初めて確かめることになる

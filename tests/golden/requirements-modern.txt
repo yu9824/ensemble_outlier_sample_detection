@@ -1,0 +1,40 @@
+# Latest-stable runtime used to generate the `modern` golden block
+# (python tests/golden/generate_golden.py --env modern).
+#
+# Python: 3.12 (created with conda-forge python 3.12.15 on osx-arm64)
+# Created: 2026-10-19, latest stable releases on PyPI at that date.
+# Contents: the runtime dependency closure of numpy, scipy, scikit-learn,
+# pandas, optuna and tqdm, with environment markers evaluated on macOS arm64.
+# Dev tools (pytest, build, ruff, mypy) are installed separately and are
+# intentionally not pinned here.
+#
+#   mamba create -n eosd-modern -c conda-forge python=3.12 pip git
+#   <env>/bin/python -m pip install -r tests/golden/requirements-modern.txt
+#   <env>/bin/python -m pip install pytest build ruff mypy
+#
+# The expected versions are duplicated as constants in generate_golden.py;
+# keep both in sync when this file changes.
+
+# Primary runtime (checked by generate_golden.py --env modern)
+numpy==2.5.4
+scipy==1.18.1
+scikit-learn==1.9.1
+pandas==3.0.6
+optuna==5.0.0
+tqdm==4.70.1
+
+# Transitive runtime dependencies
+alembic==1.20.0
+cloudpickle==3.1.2
+colorlog==6.12.0
+joblib==1.6.0
+mako==1.4.3
+markupsafe==3.0.4
+narwhals==2.27.1
+packaging==26.3
+python-dateutil==2.9.0.post0
+pyyaml==6.0.3
+six==1.17.0
+sqlalchemy==2.1.5
+threadpoolctl==3.7.0
+typing-extensions==4.16.0
