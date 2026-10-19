@@ -1,0 +1,173 @@
+name: Publish Python 🐍 distribution 📦
+run-name: ${{ github.workflow }} (${{ github.ref_name }})
+
+# リリースは公開処理の途中でキャンセルされる方が危険（PyPI 公開や GitHub Release
+# 作成が中途半端な状態で止まりうる）ため、CI とは逆に cancel-in-progress は false。
+# 同一 ref への連続タグ push があっても、先に走っている公開処理は最後まで完走させる。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Set to "true" to enable publishing on tag push.
+  # Note: env context is unavailable in job-level `if` and `environment.url`,
+  # so these values are forwarded via the build job's outputs as a workaround.
+  PUBLISH_PYPI: "true"
+  PYPI_PACKAGE_NAME: "ensemble-outlier-sample-detection"
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+jobs:
+  build:
+    name: Build distribution 📦
+    runs-on: ubuntu-latest
+    outputs:
+      publish_pypi: ${{ steps.check.outputs.publish_pypi }}
+      package_name: ${{ steps.check.outputs.package_name }}
+
+    steps:
+    # Forward env variables as job outputs so they can be referenced in
+    # job-level `if` conditions and `environment.url` of downstream jobs.
+    - id: check
+      run: |
+        echo "publish_pypi=${{ env.PUBLISH_PYPI }}" >> "$GITHUB_OUTPUT"
+        echo "package_name=${{ env.PYPI_PACKAGE_NAME }}" >> "$GITHUB_OUTPUT"
+    # 版は setuptools-scm がタグから決める。既定の浅いクローン（depth 1）では
+    # タグと履歴が手元に無く、正しい版にならないので、履歴をすべて取る。
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        # CI の build ジョブ（wheel の中身を確かめている）と同じ版でビルドする。
+        python-version: "3.13"
+
+    - name: Install pypa/build
+      run: pip install ".[dev]"
+    - name: Build a binary wheel and a source tarball
+      run: python -m build
+    - name: Store the distribution packages
+      uses: actions/upload-artifact@v7
+      with:
+        name: python-package-distributions
+        path: dist/
+
+  publish-to-pypi:
+    name: >-
+      Publish Python 🐍 distribution 📦 to PyPI
+    # Publish only on stable/rc version tags (e.g. v1.2.3, v1.2.3-rc.1) when PUBLISH_PYPI is true.
+    if: >-
+      startsWith(github.ref, 'refs/tags/') &&
+      (!contains(github.ref_name, '-') || contains(github.ref_name, 'rc')) &&
+      needs.build.outputs.publish_pypi == 'true'
+    needs:
+    - build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/${{ needs.build.outputs.package_name }}
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+    steps:
+    - name: Download all the dists
+      uses: actions/download-artifact@v8
+      with:
+        name: python-package-distributions
+        path: dist/
+    - name: Publish distribution 📦 to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: >-
+      Sign the Python 🐍 distribution 📦 with Sigstore
+      and upload them to GitHub Release
+    # Run on any tag push regardless of PUBLISH_PYPI.
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+    - build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # IMPORTANT: mandatory for making GitHub Releases
+      id-token: write  # IMPORTANT: mandatory for sigstore
+
+    steps:
+    - name: Download all the dists
+      uses: actions/download-artifact@v8
+      with:
+        name: python-package-distributions
+        path: dist/
+    - name: Sign the dists with Sigstore
+      uses: sigstore/gh-action-sigstore-python@v3.5.0
+      with:
+        inputs: >-
+          ./dist/*.tar.gz
+          ./dist/*.whl
+    - name: Determine if pre-release
+      id: prerelease
+      run: |
+        if [[ "${GITHUB_REF#refs/tags/}" == *-* ]]; then
+          echo "pre_release=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "pre_release=false" >> "$GITHUB_OUTPUT"
+        fi
+    # タグ名は任意の文字を含みうるので、${{ }} でシェルに直接埋め込まず、
+    # ランナーの環境変数 GITHUB_REF_NAME / GITHUB_REPOSITORY を引用符付きで
+    # 参照する (スクリプトインジェクション対策)。
+    - name: Create GitHub Release
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        PRE_RELEASE: ${{ steps.prerelease.outputs.pre_release }}
+      run: >-
+        gh release create
+        "$GITHUB_REF_NAME"
+        --repo "$GITHUB_REPOSITORY"
+        --generate-notes
+        --prerelease="$PRE_RELEASE"
+    - name: Upload artifact signatures to GitHub Release
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      # Upload to GitHub Release using the `gh` CLI.
+      # `dist/` contains the built packages, and the
+      # sigstore-produced signatures and certificates.
+      run: >-
+        gh release upload
+        "$GITHUB_REF_NAME" dist/**
+        --repo "$GITHUB_REPOSITORY"
+
+  publish-to-testpypi:
+    name: Publish Python 🐍 distribution 📦 to TestPyPI
+    # Publish on any tag push (including pre-releases) when PUBLISH_PYPI is true.
+    if: >-
+      startsWith(github.ref, 'refs/tags/') &&
+      needs.build.outputs.publish_pypi == 'true'
+    needs:
+    - build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/${{ needs.build.outputs.package_name }}
+
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+
+    steps:
+    - name: Download all the dists
+      uses: actions/download-artifact@v8
+      with:
+        name: python-package-distributions
+        path: dist/
+    - name: Publish distribution 📦 to TestPyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
