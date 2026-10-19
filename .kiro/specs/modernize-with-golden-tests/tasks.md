@@ -134,7 +134,7 @@
   - _Boundary: HowToRelease_
   - _Requirements: 3.14_
 
-- [ ] 5.3 (P) README と CHANGELOG を、新しい API と 1.0.0 の変更点に合わせて書く
+- [x] 5.3 (P) README と CHANGELOG を、新しい API と 1.0.0 の変更点に合わせて書く
   - README に、インストール方法、対応 Python、新しい API での使い方、CHANGELOG へのリンクを書く。参考文献とライセンスは残す
   - CHANGELOG の 1.0.0 に、破壊的変更、変更点、修正点を、移行例とあわせて書く
   - 完了条件: README の使用例をそのまま実行すると、最新環境で動く。CHANGELOG に要件 7.5 の項目がすべて書かれている
@@ -177,3 +177,4 @@
 - 4.1: 目的関数は `score(y_true, y_pred)` の順で呼ぶようになった。r2 の golden は、`r2-argument-order` パッチを当てて legacy / modern の両方で作り直した。mask は変わらず、pls-r2 の n_iter は 8 から 7 になった。作り直した r2 の golden は mse の golden とビット単位で一致する（R² は MSE の単調関数なので、理論どおり）。既定の metric が r2 なので、テストの seed を実測し直した。`SMALL` / `FAST` は 12（2 反復で収束）、`SEED_3_ITERATIONS` は 8（3 反復で収束）。3.4 の note にある seed 8 / 14 は、修正前の値。今後 golden を `--force` で全構成作り直すときは、r2 の構成に必ず `--patch r2-argument-order` を付ける（生成スクリプトでは opt-in のまま）
 - 5.1: rc のタグは `v1.0.0-rc.1` の形でないと push のトリガーに一致しない（`v1.0.0rc1` は起動しない）。setuptools-scm は `1.0.0rc1` に正規化する。TestPyPI には安定版を含むすべてのタグを公開する。gh コマンドに渡すタグ名は、`${{ github.ref_name }}` を埋め込まず、引用符付きの `"$GITHUB_REF_NAME"` で参照する（スクリプトインジェクション対策。python-template にも同じ箇所があるが、本 spec の範囲外）。5.2 の手順書では、PyPI と TestPyPI の trusted publisher を登録するときに、environment 名（`pypi` / `testpypi`）を必ず指定するよう書く
 - 5.2: 一時クローンに `v1.0.0` を付けてビルドすると、1.0.0 の sdist と wheel になる（METADATA も 1.0.0）。`v1.0.0-rc.1` は 1.0.0rc1 になる。PyPI と TestPyPI には、どちらも 0.1.0 のプロジェクトがすでにあるので、trusted publisher はプロジェクトの Publishing から登録する。実リポジトリのタグは `v0.1.0` だけで、変えていない
+- 5.3: CHANGELOG に書いた 0.1.0 の非互換は、実際に確かめた範囲に絞った（PLS の r2 / mse / mae は最新環境でも動いていた）。実際に壊れていたのは、NumPy 1.24〜1.26 の `np.bool`、scikit-learn 1.6 以降の rmse、すべての環境での SVR の 3 つ。CHANGELOG の見出しは `## [1.0.0] - Unreleased` なので、タグを付ける前に日付に書き換える（HOW_TO_RELEASE の手順 2 に追記した）
