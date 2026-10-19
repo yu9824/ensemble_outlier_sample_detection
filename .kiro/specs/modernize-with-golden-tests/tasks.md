@@ -51,7 +51,7 @@
   - 完了条件: 最新環境で、golden（8 構成 × 2 ブロック）、失敗メッセージ、import のテストがすべて通る
   - _Requirements: 1.7, 2.1, 2.2, 2.3, 2.8, 3.6, 3.8, 3.10_
 
-- [ ] 2.4 CI のテストと build ジョブを作り、全マトリクスで golden が通ることを確かめる
+- [x] 2.4 CI のテストと build ジョブを作り、全マトリクスで golden が通ることを確かめる
   - 変更検知、Python 3.10〜3.14 のテストマトリクス（ジョブあたり 10 分で打ち切り）、wheel の中身を確かめる build ジョブを作る。権限は最小にする
   - 完了条件: メンテナーの確認を得て push した後、全マトリクスのテストと build ジョブが成功し、各テストジョブが 10 分以内に終わる。一致しないセルがあれば golden を更新せずに止め、設計の Open Questions の選択肢をメンテナーに示す
   - _Requirements: 3.2, 3.11, 9.1, 9.3, 9.4_
@@ -167,3 +167,4 @@
 - 2.3: golden の照合ロジックは補助モジュール `tests/_golden_cases.py` にまとめ、conftest と test_golden からトップレベルの名前で import している。tests/ に `__init__.py` を置かない、pytest 既定の prepend import mode が前提。テスト全体は 34 件、約 28 秒。`ruff check tests` を実行すると、既存の `tests/golden/generate_golden.py:730` に ISC004 が 1 件出る（3.6 で直す）。Optuna のログを抑える処理（3.2 / 3.3）が入るまでは、失敗時の出力に INFO が大量に出るので、`-p no:logging` を付けると読みやすい
 - 3.1: `_submodels` の目的関数は、今の `Objective` と試行ごとの params・値・best_params がビット単位で一致する（8 構成とも）。P6 の順序を固定しているテスト `test_make_objective_scores_oof_in_transitional_order` と `test_make_objective_r2_is_not_yet_y_true_first` は、4.1 で逆向きに直すか置き換える。`n_trials` に np.int64 を渡すと np.int64 が返るので、3.3 では必要に応じて `int()` で受ける
 - 2.4: CI（Linux x86_64）で、SVR の中央値が macOS の golden から相対差で最大 4.3e-4 ずれた。値は全セルで同じ。メンテナーの承認を得て、SVR の許容誤差だけを rtol=atol=1e-3 に緩めた（コミット 7e8e8e8）。PLS は rtol=1e-7 / atol=1e-10 のまま
+- 2.4: draft PR #1 の CI（run 39201250407、HEAD 7e8e8e8）は、test 3.10〜3.14 と build がすべて成功した。test ジョブの所要時間は 65〜135 秒。CI は pull_request で起動するので、以降も PR #1 に push して確かめる
