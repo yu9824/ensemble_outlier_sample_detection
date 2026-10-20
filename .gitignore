@@ -23,3 +23,6 @@ src/ensemble_outlier_sample_detection/_version.py
 
 # macOS
 .DS_Store
+
+# Claude Code personal settings (shared settings and skills are tracked)
+.claude/settings.local.json
